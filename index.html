@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -37,161 +38,161 @@
   html, body { width:100%; height:100%; overflow:hidden; background:var(--bg); font-family:'Courier New',monospace; color:var(--txt); }
   #app { display:flex; flex-direction:column; height:100%; height:100dvh; }
 
-  /* header */
-  #header {
-    flex-shrink:0; background:var(--bg2);
-    border-bottom:1px solid var(--green-dim);
-    padding:8px 12px 6px;
-    display:flex; align-items:center; justify-content:space-between;
-  }
-  #header .subtitle { font-size:8px; color:var(--dim); letter-spacing:2px; }
+/* header */
+#header {
+flex-shrink:0; background:var(–bg2);
+border-bottom:1px solid var(–green-dim);
+padding:8px 12px 6px;
+display:flex; align-items:center; justify-content:space-between;
+}
+#header .subtitle { font-size:8px; color:var(–dim); letter-spacing:2px; }
 
-  /* canvas fills entire screen */
-  #canvas-wrap { flex:1; position:relative; overflow:hidden; background:#000; display:flex; align-items:center; justify-content:center; }
-  #output { display:block; width:100%; height:100%; object-fit:contain; }
-  #video  { display:none; }
+/* canvas fills entire screen */
+#canvas-wrap { flex:1; position:relative; overflow:hidden; background:#000; display:flex; align-items:center; justify-content:center; }
+#output { display:block; width:100%; height:100%; object-fit:contain; }
+#video  { display:none; }
 
-  /* tab bar floats top */
-  #tabs {
-    position:absolute; top:0; left:0; right:0; z-index:20;
-    display:flex; align-items:center; gap:6px;
-    background:linear-gradient(to bottom,#000000aa,transparent);
-    padding:10px 10px 20px;
-  }
-  .tab-btn {
-    flex:1; padding:8px 4px; font-family:'Courier New',monospace;
-    font-size:9px; letter-spacing:1px; text-align:center;
-    background:#00000077; border:1px solid #333; color:#555;
-    border-radius:3px; cursor:pointer; transition:all .15s;
-  }
-  .tab-btn.active         { color:var(--green); border-color:var(--green); background:#001a0077; }
-  .tab-btn.active.line    { color:var(--red);   border-color:var(--red);   background:#1a000877; }
-  .tab-btn.active.blob    { color:var(--cyan);  border-color:var(--cyan);  background:#001a2277; }
+/* tab bar floats top */
+#tabs {
+position:absolute; top:0; left:0; right:0; z-index:20;
+display:flex; align-items:center; gap:6px;
+background:linear-gradient(to bottom,#000000aa,transparent);
+padding:10px 10px 20px;
+}
+.tab-btn {
+flex:1; padding:8px 4px; font-family:‘Courier New’,monospace;
+font-size:9px; letter-spacing:1px; text-align:center;
+background:#00000077; border:1px solid #333; color:#555;
+border-radius:3px; cursor:pointer; transition:all .15s;
+}
+.tab-btn.active         { color:var(–green); border-color:var(–green); background:#001a0077; }
+.tab-btn.active.line    { color:var(–red);   border-color:var(–red);   background:#1a000877; }
+.tab-btn.active.blob    { color:var(–cyan);  border-color:var(–cyan);  background:#001a2277; }
 
-  /* status bar floats above action bar */
-  #statusbar {
-    position:absolute; bottom:68px; left:0; right:0; z-index:20;
-    padding:2px 12px; display:flex; align-items:center; gap:8px;
-    font-size:8px; letter-spacing:1px; color:#555; pointer-events:none;
-  }
-  #status-text { flex:1; }
-  #fps-text { color:#333; font-size:8px; }
-  #rec-dot { width:6px; height:6px; border-radius:50%; background:var(--red); display:none; animation:blink 1s infinite; }
-  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
+/* status bar floats above action bar */
+#statusbar {
+position:absolute; bottom:68px; left:0; right:0; z-index:20;
+padding:2px 12px; display:flex; align-items:center; gap:8px;
+font-size:8px; letter-spacing:1px; color:#555; pointer-events:none;
+}
+#status-text { flex:1; }
+#fps-text { color:#333; font-size:8px; }
+#rec-dot { width:6px; height:6px; border-radius:50%; background:var(–red); display:none; animation:blink 1s infinite; }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
 
-  /* action bar floats bottom */
-  #actions {
-    position:absolute; bottom:0; left:0; right:0; z-index:20;
-    display:flex; gap:8px; padding:8px 12px 20px;
-    background:linear-gradient(to top,#000000aa 60%,transparent);
-  }
+/* action bar floats bottom */
+#actions {
+position:absolute; bottom:0; left:0; right:0; z-index:20;
+display:flex; gap:8px; padding:8px 12px 20px;
+background:linear-gradient(to top,#000000aa 60%,transparent);
+}
 
-  /* settings drawer */
-  #drawer {
-    position:absolute; bottom:0; left:0; right:0; z-index:30;
-    background:#05050566; border-top:1px solid #333; border-radius:16px 16px 0 0;
-    backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px);
-    max-height:72vh; display:flex; flex-direction:column;
-    transform:translateY(100%);
-    transition:transform 0.28s cubic-bezier(0.4,0,0.2,1);
-  }
-  #drawer.open { transform:translateY(0); }
-  #drawer-handle {
-    flex-shrink:0; padding:10px 0 4px; cursor:pointer; text-align:center;
-  }
-  #drawer-handle::before {
-    content:''; display:inline-block; width:36px; height:4px;
-    background:#333; border-radius:2px;
-  }
-  #drawer-scroll {
-    flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch;
-    padding:4px 12px 32px;
-  }
-  .ctrl-section { margin-bottom:10px; }
-  .ctrl-label {
-    font-size:8px; letter-spacing:2px; color:var(--green);
-    margin-bottom:6px; display:block;
-    border-bottom:1px solid var(--green-dim); padding-bottom:3px;
-  }
-  .ctrl-label.line-label { color:var(--red);  border-bottom-color:#330011; }
-  .ctrl-label.blob-label { color:var(--cyan); border-bottom-color:var(--cyan-dim); }
+/* settings drawer */
+#drawer {
+position:absolute; bottom:0; left:0; right:0; z-index:30;
+background:#05050566; border-top:1px solid #333; border-radius:16px 16px 0 0;
+backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px);
+max-height:72vh; display:flex; flex-direction:column;
+transform:translateY(100%);
+transition:transform 0.28s cubic-bezier(0.4,0,0.2,1);
+}
+#drawer.open { transform:translateY(0); }
+#drawer-handle {
+flex-shrink:0; padding:10px 0 4px; cursor:pointer; text-align:center;
+}
+#drawer-handle::before {
+content:’’; display:inline-block; width:36px; height:4px;
+background:#333; border-radius:2px;
+}
+#drawer-scroll {
+flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch;
+padding:4px 12px 32px;
+}
+.ctrl-section { margin-bottom:10px; }
+.ctrl-label {
+font-size:8px; letter-spacing:2px; color:var(–green);
+margin-bottom:6px; display:block;
+border-bottom:1px solid var(–green-dim); padding-bottom:3px;
+}
+.ctrl-label.line-label { color:var(–red);  border-bottom-color:#330011; }
+.ctrl-label.blob-label { color:var(–cyan); border-bottom-color:var(–cyan-dim); }
 
-  .ctrl-row { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
-  .ctrl-row label { font-size:9px; color:var(--txt); width:100px; flex-shrink:0; }
-  .ctrl-row input[type=range] { flex:1; height:28px; accent-color:var(--green); background:transparent; cursor:pointer; }
-  .ctrl-row input[type=range].line-ctrl { accent-color:var(--red); }
-  .ctrl-row input[type=range].blob-ctrl { accent-color:var(--cyan); }
-  .ctrl-row .val      { font-size:9px; color:var(--green); width:32px; text-align:right; font-weight:bold; }
-  .ctrl-row .val.line-val { color:var(--red); }
-  .ctrl-row .val.blob-val { color:var(--cyan); }
-  .ctrl-row select {
-    flex:1; background:var(--bg3); color:var(--txt); border:1px solid #333;
-    font-family:'Courier New',monospace; font-size:9px; padding:4px 6px;
-    border-radius:2px; height:28px;
-  }
+.ctrl-row { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
+.ctrl-row label { font-size:9px; color:var(–txt); width:100px; flex-shrink:0; }
+.ctrl-row input[type=range] { flex:1; height:28px; accent-color:var(–green); background:transparent; cursor:pointer; }
+.ctrl-row input[type=range].line-ctrl { accent-color:var(–red); }
+.ctrl-row input[type=range].blob-ctrl { accent-color:var(–cyan); }
+.ctrl-row .val      { font-size:9px; color:var(–green); width:32px; text-align:right; font-weight:bold; }
+.ctrl-row .val.line-val { color:var(–red); }
+.ctrl-row .val.blob-val { color:var(–cyan); }
+.ctrl-row select {
+flex:1; background:var(–bg3); color:var(–txt); border:1px solid #333;
+font-family:‘Courier New’,monospace; font-size:9px; padding:4px 6px;
+border-radius:2px; height:28px;
+}
 
-  /* toggle row */
-  .toggle-row { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px; }
-  .tog-btn {
-    padding:5px 10px; font-family:'Courier New',monospace; font-size:8px;
-    letter-spacing:1px; border:1px solid #333; background:transparent;
-    color:#666; border-radius:2px; cursor:pointer; transition:all .1s;
-  }
-  .tog-btn.on          { border-color:var(--green); color:var(--green); background:#001a00; }
-  .tog-btn.on.line-tog { border-color:var(--red);   color:var(--red);   background:#1a0008; }
-  .tog-btn.on.blob-tog { border-color:var(--cyan);  color:var(--cyan);  background:#001a22; }
+/* toggle row */
+.toggle-row { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px; }
+.tog-btn {
+padding:5px 10px; font-family:‘Courier New’,monospace; font-size:8px;
+letter-spacing:1px; border:1px solid #333; background:transparent;
+color:#666; border-radius:2px; cursor:pointer; transition:all .1s;
+}
+.tog-btn.on          { border-color:var(–green); color:var(–green); background:#001a00; }
+.tog-btn.on.line-tog { border-color:var(–red);   color:var(–red);   background:#1a0008; }
+.tog-btn.on.blob-tog { border-color:var(–cyan);  color:var(–cyan);  background:#001a22; }
 
-  .action-btn {
-    flex:1; padding:11px 8px; font-family:'Courier New',monospace;
-    font-size:10px; font-weight:bold; letter-spacing:1px;
-    border-radius:3px; cursor:pointer; transition:all .15s; text-align:center;
-  }
-  #btn-record  { background:#1a000099; color:var(--red);   border:1px solid var(--red); }
-  #btn-save    { background:#000a1a99; color:var(--cyan);  border:1px solid var(--cyan); display:none; }
-  #btn-reset   { background:#11111199; color:#666; border:1px solid #333; flex:0 0 auto; padding:11px 14px; }
-  #btn-settings{
-    background:#11111199; color:var(--green); border:1px solid var(--green-dim);
-    flex:0 0 auto; padding:11px 16px; font-family:'Courier New',monospace;
-    font-size:15px; border-radius:3px; cursor:pointer;
-  }
-  #btn-settings.open { background:#001a0099; border-color:var(--green); }
+.action-btn {
+flex:1; padding:11px 8px; font-family:‘Courier New’,monospace;
+font-size:10px; font-weight:bold; letter-spacing:1px;
+border-radius:3px; cursor:pointer; transition:all .15s; text-align:center;
+}
+#btn-record  { background:#1a000099; color:var(–red);   border:1px solid var(–red); }
+#btn-save    { background:#000a1a99; color:var(–cyan);  border:1px solid var(–cyan); display:none; }
+#btn-reset   { background:#11111199; color:#666; border:1px solid #333; flex:0 0 auto; padding:11px 14px; }
+#btn-settings{
+background:#11111199; color:var(–green); border:1px solid var(–green-dim);
+flex:0 0 auto; padding:11px 16px; font-family:‘Courier New’,monospace;
+font-size:15px; border-radius:3px; cursor:pointer;
+}
+#btn-settings.open { background:#001a0099; border-color:var(–green); }
 
-  /* permission screen */
-  #perm-screen {
-    position:absolute; inset:0; background:var(--bg);
-    display:flex; flex-direction:column; align-items:center; justify-content:center;
-    gap:16px; padding:32px; z-index:100; text-align:center;
-  }
-  #perm-screen h2 { font-size:18px; color:var(--green); letter-spacing:3px; }
-  #perm-screen p  { font-size:11px; color:var(--dim); line-height:1.6; }
-  #btn-start-cam {
-    padding:14px 28px; background:#001a00; color:var(--green);
-    border:1px solid var(--green); font-family:'Courier New',monospace;
-    font-size:12px; letter-spacing:2px; border-radius:3px; cursor:pointer;
-  }
+/* permission screen */
+#perm-screen {
+position:absolute; inset:0; background:var(–bg);
+display:flex; flex-direction:column; align-items:center; justify-content:center;
+gap:16px; padding:32px; z-index:100; text-align:center;
+}
+#perm-screen h2 { font-size:18px; color:var(–green); letter-spacing:3px; }
+#perm-screen p  { font-size:11px; color:var(–dim); line-height:1.6; }
+#btn-start-cam {
+padding:14px 28px; background:#001a00; color:var(–green);
+border:1px solid var(–green); font-family:‘Courier New’,monospace;
+font-size:12px; letter-spacing:2px; border-radius:3px; cursor:pointer;
+}
 
-  /* overlay buttons — below tab bar */
-  #overlay-btns {
-    position:absolute; top:54px; right:8px;
-    display:flex; gap:6px; z-index:21;
-  }
-  #btn-flip, #btn-source {
-    background:#000000aa; border:1px solid var(--green-dim);
-    font-family:'Courier New',monospace; font-size:10px; padding:6px 10px;
-    border-radius:3px; cursor:pointer; letter-spacing:1px;
-  }
-  #btn-flip   { color:var(--green); }
-  #btn-source { color:var(--cyan);  border-color:var(--cyan-dim); }
-  #btn-source.file-active { background:#001a22; border-color:var(--cyan); }
+/* overlay buttons — below tab bar */
+#overlay-btns {
+position:absolute; top:54px; right:8px;
+display:flex; gap:6px; z-index:21;
+}
+#btn-flip, #btn-source {
+background:#000000aa; border:1px solid var(–green-dim);
+font-family:‘Courier New’,monospace; font-size:10px; padding:6px 10px;
+border-radius:3px; cursor:pointer; letter-spacing:1px;
+}
+#btn-flip   { color:var(–green); }
+#btn-source { color:var(–cyan);  border-color:var(–cyan-dim); }
+#btn-source.file-active { background:#001a22; border-color:var(–cyan); }
 
-
-  #scan-cursor {
-    position:absolute; top:0; bottom:0; width:2px;
-    background:var(--green); opacity:0.7; pointer-events:none;
-    box-shadow:0 0 8px var(--green); transition:left 0.016s linear;
-  }
-  #scan-cursor.line-mode { background:var(--red); box-shadow:0 0 8px var(--red); }
+#scan-cursor {
+position:absolute; top:0; bottom:0; width:2px;
+background:var(–green); opacity:0.7; pointer-events:none;
+box-shadow:0 0 8px var(–green); transition:left 0.016s linear;
+}
+#scan-cursor.line-mode { background:var(–red); box-shadow:0 0 8px var(–red); }
 </style>
+
 </head>
 <body>
 
@@ -242,359 +243,363 @@
 <div id="app" style="display:none">
 
   <!-- Canvas wrap fills remaining space, all floating UI inside it -->
+
   <div id="canvas-wrap">
     <canvas id="output"></canvas>
     <video  id="video"      playsinline autoplay muted></video>
     <video  id="file-video" playsinline autoplay muted loop style="display:none"></video>
     <div    id="scan-cursor"></div>
 
-    <!-- Tab bar floats top -->
-    <div id="tabs">
-      <button class="tab-btn active" id="tab-scan" onclick="setMode('scan')">◉ SLIT-SCAN</button>
-      <button class="tab-btn"        id="tab-line" onclick="setMode('line')">⊗ LINE RENDER</button>
-      <button class="tab-btn"        id="tab-blob" onclick="setMode('blob')">◎ BLOB TRACK</button>
+```
+<!-- Tab bar floats top -->
+<div id="tabs">
+  <button class="tab-btn active" id="tab-scan" onclick="setMode('scan')">◉ SLIT-SCAN</button>
+  <button class="tab-btn"        id="tab-line" onclick="setMode('line')">⊗ LINE RENDER</button>
+  <button class="tab-btn"        id="tab-blob" onclick="setMode('blob')">◎ BLOB TRACK</button>
+</div>
+
+<!-- Overlay buttons -->
+<div id="overlay-btns">
+  <button id="btn-source" onclick="toggleSource()">📁 FILE</button>
+  <button id="btn-flip"   onclick="flipCamera()">⟳ FLIP</button>
+</div>
+
+<input type="file" id="file-input" accept="video/*" style="display:none" onchange="loadVideoFile(this)">
+
+<!-- Status -->
+<div id="statusbar">
+  <div id="rec-dot"></div>
+  <div id="status-text">ready</div>
+  <div id="fps-text">--fps</div>
+</div>
+
+<!-- Action bar floats bottom -->
+<div id="actions">
+  <button class="action-btn" id="btn-record"   onclick="onRecordBtn()">⏺ RECORD</button>
+  <button class="action-btn" id="btn-save"     onclick="saveRecording()">⬇ SAVE</button>
+  <button class="action-btn" id="btn-reset"    onclick="resetScan()">↺</button>
+  <button id="btn-settings" onclick="toggleDrawer()">⚙</button>
+  <button class="action-btn" style="flex:0 0 auto;padding:11px 8px;background:#111;color:#444;border:1px solid #222;font-size:9px;" onclick="diagRecord()">DIAG</button>
+</div>
+
+<!-- Slide-up settings drawer -->
+<div id="drawer">
+<div id="drawer-handle" onclick="toggleDrawer()"></div>
+<div id="drawer-scroll">
+
+<!-- SCAN controls -->
+<div id="ctrl-scan">
+  <div class="ctrl-section">
+    <span class="ctrl-label">SCAN SHAPE</span>
+    <div class="ctrl-row">
+      <label>Direction</label>
+      <select id="scan-direction" onchange="resetScan()">
+        <option>left to right</option>
+        <option>right to left</option>
+        <option>top to bottom</option>
+        <option>bottom to top</option>
+      </select>
     </div>
-
-    <!-- Overlay buttons -->
-    <div id="overlay-btns">
-      <button id="btn-source" onclick="toggleSource()">📁 FILE</button>
-      <button id="btn-flip"   onclick="flipCamera()">⟳ FLIP</button>
+    <div class="ctrl-row">
+      <label>Slices</label>
+      <input type="range" id="scan-slices" min="10" max="200" value="80"
+        oninput="this.nextElementSibling.textContent=this.value; resetScan()">
+      <span class="val">80</span>
     </div>
-
-    <input type="file" id="file-input" accept="video/*" style="display:none" onchange="loadVideoFile(this)">
-
-    <!-- Status -->
-    <div id="statusbar">
-      <div id="rec-dot"></div>
-      <div id="status-text">ready</div>
-      <div id="fps-text">--fps</div>
+    <div class="ctrl-row">
+      <label>Speed</label>
+      <input type="range" id="scan-speed" min="1" max="20" value="3"
+        oninput="this.nextElementSibling.textContent=this.value">
+      <span class="val">3</span>
     </div>
-
-    <!-- Action bar floats bottom -->
-    <div id="actions">
-      <button class="action-btn" id="btn-record"   onclick="onRecordBtn()">⏺ RECORD</button>
-      <button class="action-btn" id="btn-save"     onclick="saveRecording()">⬇ SAVE</button>
-      <button class="action-btn" id="btn-reset"    onclick="resetScan()">↺</button>
-      <button id="btn-settings" onclick="toggleDrawer()">⚙</button>
-      <button class="action-btn" style="flex:0 0 auto;padding:11px 8px;background:#111;color:#444;border:1px solid #222;font-size:9px;" onclick="diagRecord()">DIAG</button>
+  </div>
+  <div class="ctrl-section">
+    <span class="ctrl-label">COLOUR</span>
+    <div class="ctrl-row">
+      <label>Saturation</label>
+      <input type="range" id="scan-sat" min="0" max="200" value="100"
+        oninput="this.nextElementSibling.textContent=this.value">
+      <span class="val">100</span>
     </div>
-
-    <!-- Slide-up settings drawer -->
-    <div id="drawer">
-    <div id="drawer-handle" onclick="toggleDrawer()"></div>
-    <div id="drawer-scroll">
-
-    <!-- SCAN controls -->
-    <div id="ctrl-scan">
-      <div class="ctrl-section">
-        <span class="ctrl-label">SCAN SHAPE</span>
-        <div class="ctrl-row">
-          <label>Direction</label>
-          <select id="scan-direction" onchange="resetScan()">
-            <option>left to right</option>
-            <option>right to left</option>
-            <option>top to bottom</option>
-            <option>bottom to top</option>
-          </select>
-        </div>
-        <div class="ctrl-row">
-          <label>Slices</label>
-          <input type="range" id="scan-slices" min="10" max="200" value="80"
-            oninput="this.nextElementSibling.textContent=this.value; resetScan()">
-          <span class="val">80</span>
-        </div>
-        <div class="ctrl-row">
-          <label>Speed</label>
-          <input type="range" id="scan-speed" min="1" max="20" value="3"
-            oninput="this.nextElementSibling.textContent=this.value">
-          <span class="val">3</span>
-        </div>
-      </div>
-      <div class="ctrl-section">
-        <span class="ctrl-label">COLOUR</span>
-        <div class="ctrl-row">
-          <label>Saturation</label>
-          <input type="range" id="scan-sat" min="0" max="200" value="100"
-            oninput="this.nextElementSibling.textContent=this.value">
-          <span class="val">100</span>
-        </div>
-        <div class="toggle-row">
-          <button class="tog-btn" id="tog-layer"   onclick="toggleOpt(this,'layerOrig')">◈ ORIGINAL LAYER</button>
-          <button class="tog-btn" id="tog-mirror"  onclick="toggleOpt(this,'mirror')">◈ MIRROR</button>
-          <button class="tog-btn" id="tog-scancut" onclick="toggleOpt(this,'scanCut')">◈ SUBJECT CUT</button>
-        </div>
-      </div>
+    <div class="toggle-row">
+      <button class="tog-btn" id="tog-layer"   onclick="toggleOpt(this,'layerOrig')">◈ ORIGINAL LAYER</button>
+      <button class="tog-btn" id="tog-mirror"  onclick="toggleOpt(this,'mirror')">◈ MIRROR</button>
+      <button class="tog-btn" id="tog-scancut" onclick="toggleOpt(this,'scanCut')">◈ SUBJECT CUT</button>
     </div>
+  </div>
+</div>
 
-    <!-- LINE RENDER controls -->
-    <div id="ctrl-line" style="display:none">
-      <div class="ctrl-section">
-        <span class="ctrl-label line-label">LINE SETTINGS</span>
-        <div class="ctrl-row">
-          <label>Axis</label>
-          <select id="line-axis">
-            <option value="horizontal">Horizontal</option>
-            <option value="vertical">Vertical</option>
-          </select>
-        </div>
-        <div class="ctrl-row">
-          <label>Spacing</label>
-          <input type="range" class="line-ctrl" id="line-spacing" min="1" max="20" value="4"
-            oninput="this.nextElementSibling.textContent=this.value">
-          <span class="val line-val">4</span>
-        </div>
-        <div class="ctrl-row">
-          <label>Displacement</label>
-          <input type="range" class="line-ctrl" id="line-disp" min="0" max="80" value="30"
-            oninput="this.nextElementSibling.textContent=this.value">
-          <span class="val line-val">30</span>
-        </div>
-        <div class="ctrl-row">
-          <label>Threshold</label>
-          <input type="range" class="line-ctrl" id="line-thresh" min="0" max="100" value="10"
-            oninput="this.nextElementSibling.textContent=this.value">
-          <span class="val line-val">10</span>
-        </div>
-        <div class="ctrl-row">
-          <label>Thickness</label>
-          <input type="range" class="line-ctrl" id="line-thick" min="1" max="4" value="1"
-            oninput="this.nextElementSibling.textContent=this.value">
-          <span class="val line-val">1</span>
-        </div>
+<!-- LINE RENDER controls -->
+<div id="ctrl-line" style="display:none">
+  <div class="ctrl-section">
+    <span class="ctrl-label line-label">LINE SETTINGS</span>
+    <div class="ctrl-row">
+      <label>Axis</label>
+      <select id="line-axis">
+        <option value="horizontal">Horizontal</option>
+        <option value="vertical">Vertical</option>
+      </select>
+    </div>
+    <div class="ctrl-row">
+      <label>Spacing</label>
+      <input type="range" class="line-ctrl" id="line-spacing" min="1" max="20" value="4"
+        oninput="this.nextElementSibling.textContent=this.value">
+      <span class="val line-val">4</span>
+    </div>
+    <div class="ctrl-row">
+      <label>Displacement</label>
+      <input type="range" class="line-ctrl" id="line-disp" min="0" max="80" value="30"
+        oninput="this.nextElementSibling.textContent=this.value">
+      <span class="val line-val">30</span>
+    </div>
+    <div class="ctrl-row">
+      <label>Threshold</label>
+      <input type="range" class="line-ctrl" id="line-thresh" min="0" max="100" value="10"
+        oninput="this.nextElementSibling.textContent=this.value">
+      <span class="val line-val">10</span>
+    </div>
+    <div class="ctrl-row">
+      <label>Thickness</label>
+      <input type="range" class="line-ctrl" id="line-thick" min="1" max="4" value="1"
+        oninput="this.nextElementSibling.textContent=this.value">
+      <span class="val line-val">1</span>
+    </div>
+  </div>
+  <div class="ctrl-section">
+    <span class="ctrl-label line-label">COLOUR MODE</span>
+    <div class="ctrl-row">
+      <label>Mode</label>
+      <select id="line-colormode">
+        <option value="flat">Flat</option>
+        <option value="source">From video</option>
+        <option value="gradient">Gradient</option>
+        <option value="depth">By depth</option>
+      </select>
+    </div>
+    <div class="ctrl-row">
+      <label>Line colour</label>
+      <input type="color" id="line-color" value="#ffffff" style="flex:0 0 40px;height:28px;border:1px solid #333;background:transparent;cursor:pointer;padding:2px;">
+      <label style="width:auto;flex:1">BG colour</label>
+      <input type="color" id="line-bgcolor" value="#000000" style="flex:0 0 40px;height:28px;border:1px solid #333;background:transparent;cursor:pointer;padding:2px;">
+    </div>
+  </div>
+  <div class="ctrl-section">
+    <span class="ctrl-label line-label">ANIMATION</span>
+    <div class="toggle-row">
+      <button class="tog-btn" id="tog-scroll" onclick="toggleOpt(this,'lineScroll')">◈ SCROLL</button>
+      <button class="tog-btn" id="tog-wave"   onclick="toggleOpt(this,'lineWave')">◈ WAVE</button>
+      <button class="tog-btn" id="tog-pulse"  onclick="toggleOpt(this,'linePulse')">◈ PULSE</button>
+      <button class="tog-btn" id="tog-glow"   onclick="toggleOpt(this,'lineGlow')">◈ GLOW</button>
+      <button class="tog-btn" id="tog-invert" onclick="toggleOpt(this,'lineInvert')">◈ INVERT</button>
+    </div>
+  </div>
+  <div class="ctrl-section">
+    <span class="ctrl-label line-label">SUBJECT CUT</span>
+    <div class="ctrl-row">
+      <label>Method</label>
+      <select id="seg-method" onchange="onSegMethodChange()">
+        <option value="mediapipe">MediaPipe (people)</option>
+        <option value="luma">Luminance (clean BG)</option>
+        <option value="focus">Focus sharpness (macro)</option>
+        <option value="touch">Touch select (colour fill)</option>
+      </select>
+    </div>
+    <div class="toggle-row">
+      <button class="tog-btn" id="tog-segcut"  onclick="toggleSegCut(this)">◈ ENABLE</button>
+      <button class="tog-btn" id="tog-seginv"  onclick="toggleOpt(this,'segInvert')">◈ INVERT</button>
+      <button class="tog-btn" id="tog-segshow" onclick="toggleOpt(this,'segShow')">◈ SHOW MASK</button>
+    </div>
+    <div class="ctrl-row" id="seg-status-row">
+      <label>Status</label>
+      <span id="seg-status" style="font-size:9px;color:#555;flex:1">not loaded</span>
+    </div>
+    <div class="ctrl-row">
+      <label>Feather</label>
+      <input type="range" class="line-ctrl" id="seg-feather" min="0" max="30" value="6"
+        oninput="this.nextElementSibling.textContent=this.value">
+      <span class="val line-val">6</span>
+    </div>
+    <div class="ctrl-row">
+      <label>Threshold</label>
+      <input type="range" class="line-ctrl" id="seg-thresh" min="0" max="100" value="50"
+        oninput="this.nextElementSibling.textContent=this.value">
+      <span class="val line-val">50</span>
+    </div>
+    <!-- Luma-only controls -->
+    <div id="luma-controls" style="display:none">
+      <div class="ctrl-row">
+        <label>Key channel</label>
+        <select id="luma-key-mode">
+          <option value="luma">Luminance</option>
+          <option value="r">Red</option>
+          <option value="g">Green</option>
+          <option value="b">Blue</option>
+        </select>
       </div>
-      <div class="ctrl-section">
-        <span class="ctrl-label line-label">COLOUR MODE</span>
-        <div class="ctrl-row">
-          <label>Mode</label>
-          <select id="line-colormode">
-            <option value="flat">Flat</option>
-            <option value="source">From video</option>
-            <option value="gradient">Gradient</option>
-            <option value="depth">By depth</option>
-          </select>
-        </div>
-        <div class="ctrl-row">
-          <label>Line colour</label>
-          <input type="color" id="line-color" value="#ffffff" style="flex:0 0 40px;height:28px;border:1px solid #333;background:transparent;cursor:pointer;padding:2px;">
-          <label style="width:auto;flex:1">BG colour</label>
-          <input type="color" id="line-bgcolor" value="#000000" style="flex:0 0 40px;height:28px;border:1px solid #333;background:transparent;cursor:pointer;padding:2px;">
-        </div>
-      </div>
-      <div class="ctrl-section">
-        <span class="ctrl-label line-label">ANIMATION</span>
-        <div class="toggle-row">
-          <button class="tog-btn" id="tog-scroll" onclick="toggleOpt(this,'lineScroll')">◈ SCROLL</button>
-          <button class="tog-btn" id="tog-wave"   onclick="toggleOpt(this,'lineWave')">◈ WAVE</button>
-          <button class="tog-btn" id="tog-pulse"  onclick="toggleOpt(this,'linePulse')">◈ PULSE</button>
-          <button class="tog-btn" id="tog-glow"   onclick="toggleOpt(this,'lineGlow')">◈ GLOW</button>
-          <button class="tog-btn" id="tog-invert" onclick="toggleOpt(this,'lineInvert')">◈ INVERT</button>
-        </div>
-      </div>
-      <div class="ctrl-section">
-        <span class="ctrl-label line-label">SUBJECT CUT</span>
-        <div class="ctrl-row">
-          <label>Method</label>
-          <select id="seg-method" onchange="onSegMethodChange()">
-            <option value="mediapipe">MediaPipe (people)</option>
-            <option value="luma">Luminance (clean BG)</option>
-            <option value="focus">Focus sharpness (macro)</option>
-            <option value="touch">Touch select (colour fill)</option>
-          </select>
-        </div>
-        <div class="toggle-row">
-          <button class="tog-btn" id="tog-segcut"  onclick="toggleSegCut(this)">◈ ENABLE</button>
-          <button class="tog-btn" id="tog-seginv"  onclick="toggleOpt(this,'segInvert')">◈ INVERT</button>
-          <button class="tog-btn" id="tog-segshow" onclick="toggleOpt(this,'segShow')">◈ SHOW MASK</button>
-        </div>
-        <div class="ctrl-row" id="seg-status-row">
-          <label>Status</label>
-          <span id="seg-status" style="font-size:9px;color:#555;flex:1">not loaded</span>
-        </div>
-        <div class="ctrl-row">
-          <label>Feather</label>
-          <input type="range" class="line-ctrl" id="seg-feather" min="0" max="30" value="6"
-            oninput="this.nextElementSibling.textContent=this.value">
-          <span class="val line-val">6</span>
-        </div>
-        <div class="ctrl-row">
-          <label>Threshold</label>
-          <input type="range" class="line-ctrl" id="seg-thresh" min="0" max="100" value="50"
-            oninput="this.nextElementSibling.textContent=this.value">
-          <span class="val line-val">50</span>
-        </div>
-        <!-- Luma-only controls -->
-        <div id="luma-controls" style="display:none">
-          <div class="ctrl-row">
-            <label>Key channel</label>
-            <select id="luma-key-mode">
-              <option value="luma">Luminance</option>
-              <option value="r">Red</option>
-              <option value="g">Green</option>
-              <option value="b">Blue</option>
-            </select>
-          </div>
-          <div class="ctrl-row">
-            <label>Spill suppress</label>
-            <input type="range" class="line-ctrl" id="luma-spill" min="0" max="100" value="0"
-              oninput="this.nextElementSibling.textContent=this.value">
-            <span class="val line-val">0</span>
-          </div>
-        </div>
-        <!-- Focus-only controls -->
-        <div id="focus-controls" style="display:none">
-          <div class="ctrl-row">
-            <label>Sensitivity</label>
-            <input type="range" class="line-ctrl" id="focus-sensitivity" min="1" max="20" value="6"
-              oninput="this.nextElementSibling.textContent=this.value">
-            <span class="val line-val">6</span>
-          </div>
-          <div class="ctrl-row">
-            <label>Blur spread</label>
-            <input type="range" class="line-ctrl" id="focus-spread" min="1" max="20" value="8"
-              oninput="this.nextElementSibling.textContent=this.value">
-            <span class="val line-val">8</span>
-          </div>
-          <div class="ctrl-row">
-            <label>Smooth</label>
-            <input type="range" class="line-ctrl" id="focus-smooth" min="1" max="20" value="8"
-              oninput="this.nextElementSibling.textContent=this.value">
-            <span class="val line-val">8</span>
-          </div>
-        </div>
-        <!-- Touch-only controls -->
-        <div id="touch-controls" style="display:none">
-          <div class="ctrl-row">
-            <span style="font-size:9px;color:var(--cyan);flex:1;line-height:1.5">Tap subject on preview to sample colour</span>
-          </div>
-          <div class="ctrl-row">
-            <label>Tolerance</label>
-            <input type="range" class="line-ctrl" id="touch-tolerance" min="1" max="120" value="30"
-              oninput="this.nextElementSibling.textContent=this.value">
-            <span class="val line-val">30</span>
-          </div>
-          <div class="ctrl-row">
-            <label>Grow</label>
-            <input type="range" class="line-ctrl" id="touch-grow" min="0" max="20" value="4"
-              oninput="this.nextElementSibling.textContent=this.value">
-            <span class="val line-val">4</span>
-          </div>
-          <div class="ctrl-row">
-            <label>Smooth</label>
-            <input type="range" class="line-ctrl" id="touch-smooth" min="1" max="20" value="8"
-              oninput="this.nextElementSibling.textContent=this.value">
-            <span class="val line-val">8</span>
-          </div>
-          <div class="ctrl-row">
-            <button onclick="clearTouchSeed()" style="flex:1;padding:7px;background:transparent;color:#666;border:1px solid #333;font-family:'Courier New',monospace;font-size:9px;letter-spacing:1px;border-radius:2px;cursor:pointer;">✕ CLEAR SELECTION</button>
-          </div>
-        </div>
+      <div class="ctrl-row">
+        <label>Spill suppress</label>
+        <input type="range" class="line-ctrl" id="luma-spill" min="0" max="100" value="0"
+          oninput="this.nextElementSibling.textContent=this.value">
+        <span class="val line-val">0</span>
       </div>
     </div>
+    <!-- Focus-only controls -->
+    <div id="focus-controls" style="display:none">
+      <div class="ctrl-row">
+        <label>Sensitivity</label>
+        <input type="range" class="line-ctrl" id="focus-sensitivity" min="1" max="20" value="6"
+          oninput="this.nextElementSibling.textContent=this.value">
+        <span class="val line-val">6</span>
+      </div>
+      <div class="ctrl-row">
+        <label>Blur spread</label>
+        <input type="range" class="line-ctrl" id="focus-spread" min="1" max="20" value="8"
+          oninput="this.nextElementSibling.textContent=this.value">
+        <span class="val line-val">8</span>
+      </div>
+      <div class="ctrl-row">
+        <label>Smooth</label>
+        <input type="range" class="line-ctrl" id="focus-smooth" min="1" max="20" value="8"
+          oninput="this.nextElementSibling.textContent=this.value">
+        <span class="val line-val">8</span>
+      </div>
+    </div>
+    <!-- Touch-only controls -->
+    <div id="touch-controls" style="display:none">
+      <div class="ctrl-row">
+        <span style="font-size:9px;color:var(--cyan);flex:1;line-height:1.5">Tap subject on preview to sample colour</span>
+      </div>
+      <div class="ctrl-row">
+        <label>Tolerance</label>
+        <input type="range" class="line-ctrl" id="touch-tolerance" min="1" max="120" value="30"
+          oninput="this.nextElementSibling.textContent=this.value">
+        <span class="val line-val">30</span>
+      </div>
+      <div class="ctrl-row">
+        <label>Grow</label>
+        <input type="range" class="line-ctrl" id="touch-grow" min="0" max="20" value="4"
+          oninput="this.nextElementSibling.textContent=this.value">
+        <span class="val line-val">4</span>
+      </div>
+      <div class="ctrl-row">
+        <label>Smooth</label>
+        <input type="range" class="line-ctrl" id="touch-smooth" min="1" max="20" value="8"
+          oninput="this.nextElementSibling.textContent=this.value">
+        <span class="val line-val">8</span>
+      </div>
+      <div class="ctrl-row">
+        <button onclick="clearTouchSeed()" style="flex:1;padding:7px;background:transparent;color:#666;border:1px solid #333;font-family:'Courier New',monospace;font-size:9px;letter-spacing:1px;border-radius:2px;cursor:pointer;">✕ CLEAR SELECTION</button>
+      </div>
+    </div>
+  </div>
+</div>
 
-    <!-- BLOB TRACKER controls -->
-    <div id="ctrl-blob" style="display:none">
-      <div class="ctrl-section">
-        <span class="ctrl-label blob-label">DETECTION</span>
-        <div class="ctrl-row">
-          <label>Threshold</label>
-          <input type="range" class="blob-ctrl" id="blob-thresh" min="5" max="80" value="25"
-            oninput="this.nextElementSibling.textContent=this.value">
-          <span class="val blob-val">25</span>
-        </div>
-        <div class="ctrl-row">
-          <label>Min size</label>
-          <input type="range" class="blob-ctrl" id="blob-minsize" min="50" max="3000" value="400"
-            oninput="this.nextElementSibling.textContent=this.value">
-          <span class="val blob-val">800</span>
-        </div>
-        <div class="ctrl-row">
-          <label>Learn rate</label>
-          <input type="range" class="blob-ctrl" id="blob-learn" min="1" max="20" value="5"
-            oninput="this.nextElementSibling.textContent=this.value">
-          <span class="val blob-val">5</span>
-        </div>
-      </div>
-      <div class="ctrl-section">
-        <span class="ctrl-label blob-label">STYLE</span>
-        <div class="ctrl-row">
-          <label>Overlay</label>
-          <select id="blob-overlay">
-            <option value="box">Bounding box</option>
-            <option value="fill">Fill mask</option>
-            <option value="outline">Outline only</option>
-            <option value="crosshair">Crosshair</option>
-            <option value="centroid">Centroid dot</option>
-          </select>
-        </div>
-        <div class="ctrl-row">
-          <label>Blob colour</label>
-          <input type="color" id="blob-color" value="#00c8ff" style="flex:0 0 40px;height:28px;border:1px solid #333;background:transparent;cursor:pointer;padding:2px;">
-          <label style="width:auto;flex:1">BG mix</label>
-          <input type="range" class="blob-ctrl" id="blob-bgmix" min="0" max="100" value="80"
-            oninput="this.nextElementSibling.textContent=this.value" style="flex:1">
-          <span class="val blob-val">80</span>
-        </div>
-        <div class="ctrl-row">
-          <label>Line width</label>
-          <input type="range" class="blob-ctrl" id="blob-linewidth" min="1" max="8" value="2"
-            oninput="this.nextElementSibling.textContent=this.value">
-          <span class="val blob-val">2</span>
-        </div>
-      </div>
-      <div class="ctrl-section">
-        <span class="ctrl-label blob-label">MOTION TRAILS</span>
-        <div class="toggle-row">
-          <button class="tog-btn" id="tog-blob-trails" onclick="toggleOpt(this,'blobTrails')">◈ TRAILS</button>
-          <button class="tog-btn" id="tog-blob-label"  onclick="toggleOpt(this,'blobLabel')">◈ LABEL</button>
-          <button class="tog-btn" id="tog-blob-invert" onclick="toggleOpt(this,'blobInvert')">◈ INVERT BG</button>
-          <button class="tog-btn" id="tog-blob-glow"   onclick="toggleOpt(this,'blobGlow')">◈ GLOW</button>
-        </div>
-        <div class="ctrl-row" id="trail-len-row" style="display:none">
-          <label>Trail length</label>
-          <input type="range" class="blob-ctrl" id="blob-traillen" min="5" max="60" value="20"
-            oninput="this.nextElementSibling.textContent=this.value">
-          <span class="val blob-val">20</span>
-        </div>
-        <div class="ctrl-row" id="trail-fade-row" style="display:none">
-          <label>Trail fade</label>
-          <input type="range" class="blob-ctrl" id="blob-trailfade" min="10" max="100" value="60"
-            oninput="this.nextElementSibling.textContent=this.value">
-          <span class="val blob-val">60</span>
-        </div>
-      </div>
-      <div class="ctrl-section">
-        <span class="ctrl-label blob-label">GRADE</span>
-        <div class="ctrl-row">
-          <label>Look</label>
-          <select id="blob-grade">
-            <option value="none">Off (colour)</option>
-            <option value="bw">B&W — standard</option>
-            <option value="bw-crush">B&W — crushed blacks</option>
-            <option value="bw-lift">B&W — lifted blacks</option>
-            <option value="bw-high">B&W — high contrast</option>
-            <option value="noir">Noir (deep shadow tint)</option>
-            <option value="thermal">Thermal (heat map)</option>
-            <option value="phosphor">Phosphor green</option>
-            <option value="phosphor-amber">Phosphor amber</option>
-            <option value="blueprint">Blueprint</option>
-            <option value="bleach">Bleach bypass</option>
-          </select>
-        </div>
-        <div class="ctrl-row">
-          <label>Exposure</label>
-          <input type="range" class="blob-ctrl" id="blob-exposure" min="-80" max="80" value="0"
-            oninput="this.nextElementSibling.textContent=this.value">
-          <span class="val blob-val">0</span>
-        </div>
-        <div class="ctrl-row">
-          <label>Contrast</label>
-          <input type="range" class="blob-ctrl" id="blob-contrast" min="-50" max="100" value="0"
-            oninput="this.nextElementSibling.textContent=this.value">
-          <span class="val blob-val">0</span>
-        </div>
-      </div>
-    </div><!-- /ctrl-blob -->
-    </div><!-- /drawer-scroll -->
+<!-- BLOB TRACKER controls -->
+<div id="ctrl-blob" style="display:none">
+  <div class="ctrl-section">
+    <span class="ctrl-label blob-label">DETECTION</span>
+    <div class="ctrl-row">
+      <label>Threshold</label>
+      <input type="range" class="blob-ctrl" id="blob-thresh" min="5" max="80" value="25"
+        oninput="this.nextElementSibling.textContent=this.value">
+      <span class="val blob-val">25</span>
+    </div>
+    <div class="ctrl-row">
+      <label>Min size</label>
+      <input type="range" class="blob-ctrl" id="blob-minsize" min="50" max="3000" value="400"
+        oninput="this.nextElementSibling.textContent=this.value">
+      <span class="val blob-val">800</span>
+    </div>
+    <div class="ctrl-row">
+      <label>Learn rate</label>
+      <input type="range" class="blob-ctrl" id="blob-learn" min="1" max="20" value="5"
+        oninput="this.nextElementSibling.textContent=this.value">
+      <span class="val blob-val">5</span>
+    </div>
+  </div>
+  <div class="ctrl-section">
+    <span class="ctrl-label blob-label">STYLE</span>
+    <div class="ctrl-row">
+      <label>Overlay</label>
+      <select id="blob-overlay">
+        <option value="box">Bounding box</option>
+        <option value="fill">Fill mask</option>
+        <option value="outline">Outline only</option>
+        <option value="crosshair">Crosshair</option>
+        <option value="centroid">Centroid dot</option>
+      </select>
+    </div>
+    <div class="ctrl-row">
+      <label>Blob colour</label>
+      <input type="color" id="blob-color" value="#00c8ff" style="flex:0 0 40px;height:28px;border:1px solid #333;background:transparent;cursor:pointer;padding:2px;">
+      <label style="width:auto;flex:1">BG mix</label>
+      <input type="range" class="blob-ctrl" id="blob-bgmix" min="0" max="100" value="80"
+        oninput="this.nextElementSibling.textContent=this.value" style="flex:1">
+      <span class="val blob-val">80</span>
+    </div>
+    <div class="ctrl-row">
+      <label>Line width</label>
+      <input type="range" class="blob-ctrl" id="blob-linewidth" min="1" max="8" value="2"
+        oninput="this.nextElementSibling.textContent=this.value">
+      <span class="val blob-val">2</span>
+    </div>
+  </div>
+  <div class="ctrl-section">
+    <span class="ctrl-label blob-label">MOTION TRAILS</span>
+    <div class="toggle-row">
+      <button class="tog-btn" id="tog-blob-trails" onclick="toggleOpt(this,'blobTrails')">◈ TRAILS</button>
+      <button class="tog-btn" id="tog-blob-label"  onclick="toggleOpt(this,'blobLabel')">◈ LABEL</button>
+      <button class="tog-btn" id="tog-blob-invert" onclick="toggleOpt(this,'blobInvert')">◈ INVERT BG</button>
+      <button class="tog-btn" id="tog-blob-glow"   onclick="toggleOpt(this,'blobGlow')">◈ GLOW</button>
+    </div>
+    <div class="ctrl-row" id="trail-len-row" style="display:none">
+      <label>Trail length</label>
+      <input type="range" class="blob-ctrl" id="blob-traillen" min="5" max="60" value="20"
+        oninput="this.nextElementSibling.textContent=this.value">
+      <span class="val blob-val">20</span>
+    </div>
+    <div class="ctrl-row" id="trail-fade-row" style="display:none">
+      <label>Trail fade</label>
+      <input type="range" class="blob-ctrl" id="blob-trailfade" min="10" max="100" value="60"
+        oninput="this.nextElementSibling.textContent=this.value">
+      <span class="val blob-val">60</span>
+    </div>
+  </div>
+  <div class="ctrl-section">
+    <span class="ctrl-label blob-label">GRADE</span>
+    <div class="ctrl-row">
+      <label>Look</label>
+      <select id="blob-grade">
+        <option value="none">Off (colour)</option>
+        <option value="bw">B&W — standard</option>
+        <option value="bw-crush">B&W — crushed blacks</option>
+        <option value="bw-lift">B&W — lifted blacks</option>
+        <option value="bw-high">B&W — high contrast</option>
+        <option value="noir">Noir (deep shadow tint)</option>
+        <option value="thermal">Thermal (heat map)</option>
+        <option value="phosphor">Phosphor green</option>
+        <option value="phosphor-amber">Phosphor amber</option>
+        <option value="blueprint">Blueprint</option>
+        <option value="bleach">Bleach bypass</option>
+      </select>
+    </div>
+    <div class="ctrl-row">
+      <label>Exposure</label>
+      <input type="range" class="blob-ctrl" id="blob-exposure" min="-80" max="80" value="0"
+        oninput="this.nextElementSibling.textContent=this.value">
+      <span class="val blob-val">0</span>
+    </div>
+    <div class="ctrl-row">
+      <label>Contrast</label>
+      <input type="range" class="blob-ctrl" id="blob-contrast" min="-50" max="100" value="0"
+        oninput="this.nextElementSibling.textContent=this.value">
+      <span class="val blob-val">0</span>
+    </div>
+  </div>
+</div><!-- /ctrl-blob -->
+</div><!-- /drawer-scroll -->
+```
+
   </div><!-- /drawer -->
 </div><!-- /app -->
 
@@ -1889,135 +1894,126 @@ function diagRecord() {
 }
 
 // ── Offline renderer ──────────────────────────────────────────
-// Processes the source file frame-by-frame at full resolution offline.
-// Preview runs at low res; this re-reads the original file at full quality.
+// Plays the source file at full res and captures frames in real time
 async function startOfflineRender() {
   if (isRendering) return;
   if (!sourceFileObj) { setStatus('⚠ No file loaded'); return; }
 
   isRendering = true;
   const btn = document.getElementById('btn-record');
+  let cancelled = false;
   btn.textContent = '⏹ CANCEL';
   btn.style.background = '#330000';
-
-  // Create a full-res video element to read frames from
-  const srcVid = document.createElement('video');
-  srcVid.src = URL.createObjectURL(sourceFileObj);
-  srcVid.muted = true;
-  srcVid.playsInline = true;
-  await new Promise(r => { srcVid.onloadedmetadata = r; });
-
-  const fullW = srcVid.videoWidth;
-  const fullH = srcVid.videoHeight;
-  const fps   = 30;
-  const duration = srcVid.duration;
-
-  setStatus(`⚙ Rendering ${fullW}×${fullH} ${Math.round(duration)}s…`);
-
-  // Render canvas at full res
-  renderCanvas = document.createElement('canvas');
-  renderCanvas.width  = fullW;
-  renderCanvas.height = fullH;
-  const rCtx = renderCanvas.getContext('2d');
-
-  // Offscreen buffers at full res
-  const rTmp  = document.createElement('canvas'); rTmp.width=fullW; rTmp.height=fullH;
-  const rTmpCtx = rTmp.getContext('2d');
-  const rScan = document.createElement('canvas'); rScan.width=fullW; rScan.height=fullH;
-  const rScanCtx = rScan.getContext('2d');
-  rScanCtx.fillStyle='#000'; rScanCtx.fillRect(0,0,fullW,fullH);
-
-  // Set up MediaRecorder on render canvas
-  const mimeType = getBestMimeType();
-  const renderStream = renderCanvas.captureStream(fps);
-  const recorder = new MediaRecorder(renderStream, mimeType ? {mimeType} : {});
-  const chunks = [];
-  recorder.ondataavailable = e => { if(e.data.size>0) chunks.push(e.data); };
-
-  // Read current settings
-  const slices   = parseInt(document.getElementById('scan-slices').value);
-  const dir      = document.getElementById('scan-direction').value;
-  const sat      = parseInt(document.getElementById('scan-sat').value) / 100;
-  const isHoriz  = dir.includes('left') || dir.includes('right');
-  const total    = isHoriz ? fullW : fullH;
-  const sliceW   = Math.ceil(total / slices);
-  let rScanPos   = 0;
-
-  recorder.start(100);
-
-  // Step through video frame by frame
-  let cancelled = false;
   btn.onclick = () => { cancelled = true; };
 
-  const frameInterval = 1 / fps;
-  let t = 0;
+  const srcVid = document.createElement('video');
+  srcVid.src = URL.createObjectURL(sourceFileObj);
+  srcVid.muted = true; srcVid.playsInline = true; srcVid.loop = false;
 
-  while (t <= duration && !cancelled) {
-    srcVid.currentTime = t;
-    await new Promise(r => { srcVid.onseeked = r; });
+  await new Promise(r => { srcVid.onloadedmetadata = r; setTimeout(r, 3000); });
 
-    // Draw frame to render canvas applying current mode
+  const fullW = srcVid.videoWidth || 1280;
+  const fullH = srcVid.videoHeight || 720;
+  const fps   = 30;
+  const dur   = srcVid.duration;
+
+  setStatus(`⚙ Rendering ${fullW}×${fullH} — ${Math.round(dur)}s`);
+
+  // Offscreen render canvas
+  const rCanvas = document.createElement('canvas');
+  rCanvas.width = fullW; rCanvas.height = fullH;
+  const rCtx = rCanvas.getContext('2d');
+
+  // Scan buffer
+  const rScan = document.createElement('canvas');
+  rScan.width = fullW; rScan.height = fullH;
+  const rScanCtx = rScan.getContext('2d');
+  rScanCtx.fillStyle = '#000'; rScanCtx.fillRect(0,0,fullW,fullH);
+
+  const mimeType = getBestMimeType();
+  const recStream = rCanvas.captureStream(fps);
+  const recorder  = new MediaRecorder(recStream, mimeType ? {mimeType} : {});
+  const chunks = [];
+  recorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+
+  const slices  = parseInt(document.getElementById('scan-slices').value);
+  const dir     = document.getElementById('scan-direction').value;
+  const sat     = parseInt(document.getElementById('scan-sat').value) / 100;
+  const isHoriz = dir.includes('left') || dir.includes('right');
+  const total   = isHoriz ? fullW : fullH;
+  const sliceW  = Math.ceil(total / slices);
+  let rPos = 0;
+
+  recorder.start(100);
+  let renderDone = false;
+
+  function drawFrame() {
+    if (renderDone) return;
     rCtx.globalAlpha = 1; rCtx.globalCompositeOperation = 'source-over'; rCtx.filter = 'none';
 
     if (mode === 'scan') {
-      // Apply saturation
+      const rTmp = document.createElement('canvas');
+      rTmp.width = fullW; rTmp.height = fullH;
+      const rTmpCtx = rTmp.getContext('2d');
       rTmpCtx.filter = sat !== 1 ? `saturate(${sat})` : 'none';
       rTmpCtx.drawImage(srcVid, 0, 0, fullW, fullH);
       rTmpCtx.filter = 'none';
-      // Paint scan slice
-      const pos = rScanPos % slices;
+      const pos = rPos % slices;
       const px  = Math.floor(pos * sliceW);
       if (isHoriz) {
-        const x1 = dir==='right to left' ? total-px-sliceW : px;
+        const x1 = dir === 'right to left' ? total-px-sliceW : px;
         rScanCtx.drawImage(rTmp, x1,0,sliceW,fullH, x1,0,sliceW,fullH);
       } else {
-        const y1 = dir==='bottom to top' ? total-px-sliceW : px;
+        const y1 = dir === 'bottom to top' ? total-px-sliceW : px;
         rScanCtx.drawImage(rTmp, 0,y1,fullW,sliceW, 0,y1,fullW,sliceW);
       }
-      rScanPos++;
-      if (opts.layerOrig) {
-        rCtx.drawImage(srcVid, 0, 0, fullW, fullH);
-        rCtx.drawImage(rScan, 0, 0);
-      } else {
-        rCtx.drawImage(rScan, 0, 0);
-      }
+      rPos++;
+      if (opts.layerOrig) { rCtx.drawImage(srcVid, 0,0,fullW,fullH); }
+      rCtx.drawImage(rScan, 0, 0);
     } else {
-      // Line and blob modes — just draw the video for now
       rCtx.drawImage(srcVid, 0, 0, fullW, fullH);
     }
-
-    // Push frame to recorder by waiting one animation frame
-    await new Promise(r => setTimeout(r, 1000/fps));
-    t += frameInterval;
-
-    const pct = Math.round((t/duration)*100);
-    if (pct % 5 === 0) setStatus(`⚙ Rendering ${pct}%…`);
   }
 
-  recorder.stop();
-  srcVid.src = '';
+  function rafLoop() {
+    if (cancelled) { finishRender(true); return; }
+    drawFrame();
+    const pct = Math.round((srcVid.currentTime / dur) * 100);
+    setStatus(`⚙ ${pct}%`);
+    if (srcVid.ended || srcVid.currentTime >= dur - 0.1) {
+      finishRender(false);
+    } else {
+      requestAnimationFrame(rafLoop);
+    }
+  }
 
-  if (cancelled) {
-    isRendering = false;
-    btn.textContent = '⏺ RECORD';
+  async function finishRender(wasCancelled) {
+    if (renderDone) return;
+    renderDone = true;
+    recorder.stop();
+    srcVid.pause(); srcVid.src = '';
+
+    btn.textContent = '⚙ RENDER';
     btn.style.background = '#1a000099';
     btn.onclick = onRecordBtn;
-    setStatus('Render cancelled');
-    return;
+    isRendering = false;
+
+    if (wasCancelled) { setStatus('Render cancelled'); return; }
+
+    await new Promise(r => { recorder.onstop = r; setTimeout(r, 1500); });
+    const ext = (mimeType && mimeType.startsWith('video/mp4')) ? 'mp4' : 'webm';
+    recordedBlob = new Blob(chunks, { type: mimeType || 'video/mp4' });
+    recordedBlob._ext = ext;
+    document.getElementById('btn-save').style.display = 'block';
+    setStatus(`✓ Done — ${fullW}×${fullH} ${ext.toUpperCase()}`);
   }
 
-  await new Promise(r => { recorder.onstop = r; });
-  const ext = mimeType && mimeType.startsWith('video/mp4') ? 'mp4' : 'webm';
-  recordedBlob = new Blob(chunks, { type: mimeType || 'video/mp4' });
-  recordedBlob._ext = ext;
-
-  isRendering = false;
-  btn.textContent = '⏺ RECORD';
-  btn.style.background = '#1a000099';
-  btn.onclick = onRecordBtn;
-  document.getElementById('btn-save').style.display = 'block';
-  setStatus(`✓ Render complete — ${fullW}×${fullH} ${ext.toUpperCase()}`);
+  srcVid.onended = () => finishRender(false);
+  await srcVid.play().catch(e => { setStatus('⚠ Could not play source: ' + e.message); finishRender(true); });
+  requestAnimationFrame(rafLoop);
 }
+
+
 function getBestMimeType() {
   const types = ['video/mp4;codecs=avc1','video/mp4','video/webm;codecs=vp9','video/webm;codecs=vp8','video/webm'];
   for (const t of types) { if (MediaRecorder.isTypeSupported(t)) return t; }
@@ -2086,5 +2082,6 @@ function saveRecording() {
 
 function setStatus(msg) { document.getElementById('status-text').textContent = msg; }
 </script>
+
 </body>
 </html>
