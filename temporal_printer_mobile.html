@@ -231,6 +231,8 @@
     .pd.error  { background:#ff2266; border-color:#ff2266; }
   </style>
 </div>
+
+<div id="perm-screen">
   <h2>⌛ TEMPORAL PRINTER</h2>
   <p>Phosfein Design<br><br>slit-scan · line renderer · blob tracker<br><br><small style="color:#555;font-size:9px">Open in Safari · Allow camera when prompted</small></p>
   <button id="btn-start-cam" onclick="initCamera('environment')">📷 START CAMERA</button>
@@ -701,6 +703,7 @@ let segReady        = false;
 let segRunning      = false;
 let focusMaskPrev   = null;
 
+let touchSeed       = null;
 let touchMaskPrev   = null;  // temporal buffer
 let touchMaskCur    = null;  // current computed mask
 
@@ -888,7 +891,9 @@ function onCanvasTap(e) {
     touchSeed = { r: px[0], g: px[1], b: px[2] };
     touchMaskPrev = null;
     setStatus(`⊙ sampled rgb(${px[0]},${px[1]},${px[2]})`);
+  }
 }
+
 function clearTouchSeed() {
   touchSeed = null;
   touchMaskPrev = null;
@@ -1984,6 +1989,7 @@ async function startOfflineRender() {
   document.getElementById('btn-save').style.display = 'block';
   setStatus(`✓ Render complete — ${fullW}×${fullH} ${ext.toUpperCase()}`);
 }
+function getBestMimeType() {
   const types = ['video/mp4;codecs=avc1','video/mp4','video/webm;codecs=vp9','video/webm;codecs=vp8','video/webm'];
   for (const t of types) { if (MediaRecorder.isTypeSupported(t)) return t; }
   return '';
