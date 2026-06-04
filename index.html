@@ -2003,8 +2003,14 @@ function startRecord() {
   const stream = output.captureStream(24);
   const mimeType = getBestMimeType();
   const options = mimeType ? {mimeType} : {};
-  const ext = mimeType.startsWith('video/mp4') ? 'mp4' : 'webm';
-  mediaRecorder = new MediaRecorder(stream, options);
+  const ext = (mimeType && mimeType.startsWith('video/mp4')) ? 'mp4' : 'webm';
+  try {
+    mediaRecorder = new MediaRecorder(stream, options);
+  } catch(e) {
+    // Fallback — try with no options
+    try { mediaRecorder = new MediaRecorder(stream); }
+    catch(e2) { setStatus('⚠ Recording not supported'); return; }
+  }
   mediaRecorder.ondataavailable = e => { if(e.data.size>0) recordedChunks.push(e.data); };
   mediaRecorder.onstop = () => {
     recordedBlob = new Blob(recordedChunks, {type: mimeType || 'video/mp4'});
@@ -2012,13 +2018,17 @@ function startRecord() {
     setStatus(`✓ Ready — ${ext.toUpperCase()}`);
     document.getElementById('btn-save').style.display = 'block';
     document.getElementById('btn-record').textContent = '⏺ RECORD';
-    document.getElementById('btn-record').style.background = '#1a0000';
+    document.getElementById('btn-record').style.background = '#1a000099';
+    document.getElementById('btn-record').onclick = onRecordBtn;
     document.getElementById('rec-dot').style.display = 'none';
+    isRecording = false;
   };
   mediaRecorder.start(100);
   isRecording = true;
-  document.getElementById('btn-record').textContent = '⏹ STOP';
-  document.getElementById('btn-record').style.background = '#330000';
+  const btn = document.getElementById('btn-record');
+  btn.textContent = '⏹ STOP';
+  btn.style.background = '#330000';
+  btn.onclick = stopRecord;  // directly wire to stopRecord, no toggle logic
   document.getElementById('rec-dot').style.display = 'block';
   setStatus('● REC');
   let recFrames = 0;
