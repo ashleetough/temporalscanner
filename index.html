@@ -1856,8 +1856,13 @@ function drawBlob(vw, vh) {
 
 // ── Recording ─────────────────────────────────────────────────
 function onRecordBtn() {
-  if (videoSource === 'file' && sourceFileObj) startOfflineRender();
-  else toggleRecord();
+  // In file mode always do offline render regardless of sourceFileObj state
+  if (videoSource === 'file') {
+    if (sourceFileObj) startOfflineRender();
+    else setStatus('⚠ No file loaded — load a file first');
+  } else {
+    toggleRecord();
+  }
 }
 
 function diagRecord() {
@@ -2022,9 +2027,11 @@ function getBestMimeType() {
 function toggleRecord() { if (isRecording) stopRecord(); else startRecord(); }
 
 function startRecord() {
-  recordedChunks = []; recordedBlob = null;
-  document.getElementById('btn-save').style.display = 'none';
-  const stream = output.captureStream(24);
+  // Make sure we're capturing the right source
+  if (videoSource === 'file' && !sourceFileObj) {
+    setStatus('⚠ Load a file first');
+    return;
+  }
   const mimeType = getBestMimeType();
   const options = mimeType ? {mimeType} : {};
   const ext = (mimeType && mimeType.startsWith('video/mp4')) ? 'mp4' : 'webm';
