@@ -1,0 +1,18 @@
+{
+  "name": "Temporal Printer — Phosfein Design",
+  "short_name": "Temporal Printer",
+  "description": "Slit-scan, line renderer, and blob tracker camera effects",
+  "start_url": "/temporal_printer_mobile.html",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'><rect width='512' height='512' fill='%23000'/><text x='256' y='320' text-anchor='middle' font-size='280' fill='%2300ff41'>⌛</text></svg>",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
