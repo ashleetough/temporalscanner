@@ -1862,14 +1862,25 @@ function onRecordBtn() {
 
 function diagRecord() {
   var lines = [];
+  lines.push('canvas: ' + output.width + 'x' + output.height);
+  lines.push('outCtx null: ' + (outCtx === null || outCtx === undefined));
   lines.push('captureStream: ' + (typeof output.captureStream === 'function' ? 'YES' : 'NO'));
   var types = ['video/mp4;codecs=avc1','video/mp4','video/webm;codecs=vp9','video/webm'];
   types.forEach(t => lines.push((MediaRecorder.isTypeSupported(t)?'✓':'✗') + ' ' + t));
   try {
     var s = output.captureStream(24);
+    var track = s.getTracks()[0];
     lines.push('stream tracks: ' + s.getTracks().length);
-  } catch(e) { lines.push('captureStream err: ' + e.message); }
-  alert(lines.join('\n'));
+    if (track) lines.push('track enabled: ' + track.enabled + ', muted: ' + track.muted);
+    // Try a 2-second test record
+    var testChunks = [];
+    var mr2 = new MediaRecorder(s, {mimeType:'video/mp4;codecs=avc1'});
+    mr2.ondataavailable = function(e) { lines.push('chunk: ' + e.data.size + 'b'); testChunks.push(e.data); };
+    mr2.onstop = function() { alert(lines.join('\n') + '\ntotal chunks: ' + testChunks.length + '\ntotal size: ' + testChunks.reduce((a,c)=>a+c.size,0)); };
+    mr2.start(500);
+    setTimeout(function(){ mr2.stop(); }, 2000);
+    lines.push('test recording 2s...');
+  } catch(e) { lines.push('ERR: ' + e.message); alert(lines.join('\n')); }
 }
 
 // ── Offline renderer ──────────────────────────────────────────
