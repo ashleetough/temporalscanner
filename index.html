@@ -276,6 +276,7 @@
       <button class="action-btn" id="btn-save"     onclick="saveRecording()">⬇ SAVE</button>
       <button class="action-btn" id="btn-reset"    onclick="resetScan()">↺</button>
       <button id="btn-settings" onclick="toggleDrawer()">⚙</button>
+      <button class="action-btn" style="flex:0 0 auto;padding:11px 8px;background:#111;color:#444;border:1px solid #222;font-size:9px;" onclick="diagRecord()">DIAG</button>
     </div>
 
     <!-- Slide-up settings drawer -->
@@ -1857,6 +1858,18 @@ function drawBlob(vw, vh) {
 function onRecordBtn() {
   if (videoSource === 'file' && sourceFileObj) startOfflineRender();
   else toggleRecord();
+}
+
+function diagRecord() {
+  var lines = [];
+  lines.push('captureStream: ' + (typeof output.captureStream === 'function' ? 'YES' : 'NO'));
+  var types = ['video/mp4;codecs=avc1','video/mp4','video/webm;codecs=vp9','video/webm'];
+  types.forEach(t => lines.push((MediaRecorder.isTypeSupported(t)?'✓':'✗') + ' ' + t));
+  try {
+    var s = output.captureStream(24);
+    lines.push('stream tracks: ' + s.getTracks().length);
+  } catch(e) { lines.push('captureStream err: ' + e.message); }
+  alert(lines.join('\n'));
 }
 
 // ── Offline renderer ──────────────────────────────────────────
