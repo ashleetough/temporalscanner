@@ -195,7 +195,42 @@
 </head>
 <body>
 
-<div id="perm-screen">
+<div id="pin-screen" style="position:fixed;inset:0;background:#000;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;z-index:200;font-family:'Courier New',monospace;">
+  <div style="color:#00ff41;font-size:13px;letter-spacing:3px;">⌛ TEMPORAL PRINTER</div>
+  <div style="color:#444;font-size:9px;letter-spacing:2px;">PHOSFEIN DESIGN</div>
+  <div id="pin-dots" style="display:flex;gap:12px;margin:8px 0;">
+    <div class="pd" style="width:12px;height:12px;border-radius:50%;border:1px solid #333;"></div>
+    <div class="pd" style="width:12px;height:12px;border-radius:50%;border:1px solid #333;"></div>
+    <div class="pd" style="width:12px;height:12px;border-radius:50%;border:1px solid #333;"></div>
+    <div class="pd" style="width:12px;height:12px;border-radius:50%;border:1px solid #333;"></div>
+  </div>
+  <div id="pin-err" style="color:#ff2266;font-size:9px;letter-spacing:2px;height:14px;"></div>
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;width:220px;">
+    <button class="pn" onclick="pinTap('1')">1</button>
+    <button class="pn" onclick="pinTap('2')">2</button>
+    <button class="pn" onclick="pinTap('3')">3</button>
+    <button class="pn" onclick="pinTap('4')">4</button>
+    <button class="pn" onclick="pinTap('5')">5</button>
+    <button class="pn" onclick="pinTap('6')">6</button>
+    <button class="pn" onclick="pinTap('7')">7</button>
+    <button class="pn" onclick="pinTap('8')">8</button>
+    <button class="pn" onclick="pinTap('9')">9</button>
+    <button class="pn" onclick="pinClear()" style="color:#666;font-size:11px;">CLR</button>
+    <button class="pn" onclick="pinTap('0')">0</button>
+    <button class="pn" onclick="pinBack()" style="color:#666;font-size:14px;">⌫</button>
+  </div>
+  <style>
+    .pn {
+      padding:16px; background:#0a0a0a; color:#00ff41;
+      border:1px solid #1a1a1a; font-family:'Courier New',monospace;
+      font-size:18px; border-radius:3px; cursor:pointer;
+      -webkit-tap-highlight-color:transparent;
+    }
+    .pn:active { background:#001a00; border-color:#00ff41; }
+    .pd.filled { background:#00ff41; border-color:#00ff41; }
+    .pd.error  { background:#ff2266; border-color:#ff2266; }
+  </style>
+</div>
   <h2>⌛ TEMPORAL PRINTER</h2>
   <p>Phosfein Design<br><br>slit-scan · line renderer · blob tracker<br><br><small style="color:#555;font-size:9px">Open in Safari · Allow camera when prompted</small></p>
   <button id="btn-start-cam" onclick="initCamera('environment')">📷 START CAMERA</button>
@@ -561,7 +596,52 @@
 </div><!-- /app -->
 
 <script>
-// ── Constants ─────────────────────────────────────────────────
+// ── PIN ───────────────────────────────────────────────────────
+var pinEntry = '';
+var PIN = '2911';
+
+function pinTap(d) {
+  if (pinEntry.length >= 4) return;
+  pinEntry += d;
+  updatePinDots();
+  if (pinEntry.length === 4) {
+    setTimeout(checkPin, 120);
+  }
+}
+
+function pinBack() {
+  pinEntry = pinEntry.slice(0, -1);
+  updatePinDots();
+}
+
+function pinClear() {
+  pinEntry = '';
+  updatePinDots();
+  document.getElementById('pin-err').textContent = '';
+}
+
+function updatePinDots() {
+  var dots = document.querySelectorAll('.pd');
+  dots.forEach(function(d, i) {
+    d.classList.toggle('filled', i < pinEntry.length);
+    d.classList.remove('error');
+  });
+}
+
+function checkPin() {
+  if (pinEntry === PIN) {
+    document.getElementById('pin-screen').style.display = 'none';
+  } else {
+    var dots = document.querySelectorAll('.pd');
+    dots.forEach(function(d) { d.classList.add('error'); d.classList.remove('filled'); });
+    document.getElementById('pin-err').textContent = '✕ INCORRECT';
+    setTimeout(function() {
+      pinEntry = '';
+      updatePinDots();
+      document.getElementById('pin-err').textContent = '';
+    }, 800);
+  }
+}
 const SEG_W    = 256;   // MediaPipe inference resolution
 const SEG_H    = 144;
 const DETECT_W = 240;   // Blob detection resolution
