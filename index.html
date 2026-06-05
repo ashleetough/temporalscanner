@@ -19,6 +19,8 @@
   }
 </script>
 <title>Temporal Printer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700&family=Share+Tech+Mono&family=VT323&family=Rajdhani:wght@700&family=Bebas+Neue&family=Space+Mono:wght@700" rel="stylesheet">
 <script src="https://unpkg.com/@mediapipe/selfie_segmentation@0.1.1675465747/selfie_segmentation.js" crossorigin="anonymous"></script>
 <style>
   :root {
@@ -415,15 +417,15 @@ box-shadow:0 0 8px var(–green); transition:left 0.016s linear;
     </div>
     <div class="ctrl-row">
       <label>Feather</label>
-      <input type="range" class="line-ctrl" id="seg-feather" min="0" max="30" value="6"
+      <input type="range" class="line-ctrl" id="seg-feather" min="0" max="30" value="3"
         oninput="this.nextElementSibling.textContent=this.value">
-      <span class="val line-val">6</span>
+      <span class="val line-val">3</span>
     </div>
     <div class="ctrl-row">
       <label>Threshold</label>
-      <input type="range" class="line-ctrl" id="seg-thresh" min="0" max="100" value="50"
+      <input type="range" class="line-ctrl" id="seg-thresh" min="0" max="100" value="75"
         oninput="this.nextElementSibling.textContent=this.value">
-      <span class="val line-val">50</span>
+      <span class="val line-val">75</span>
     </div>
     <!-- Luma-only controls -->
     <div id="luma-controls" style="display:none">
@@ -551,6 +553,13 @@ box-shadow:0 0 8px var(–green); transition:left 0.016s linear;
       <button class="tog-btn" id="tog-blob-label"  onclick="toggleOpt(this,'blobLabel')">◈ LABEL</button>
       <button class="tog-btn" id="tog-blob-invert" onclick="toggleOpt(this,'blobInvert')">◈ INVERT BG</button>
       <button class="tog-btn" id="tog-blob-glow"   onclick="toggleOpt(this,'blobGlow')">◈ GLOW</button>
+      <button class="tog-btn" id="tog-blob-connect" onclick="toggleOpt(this,'blobConnect')">◈ CONNECT</button>
+    </div>
+    <div class="ctrl-row" id="connect-dist-row" style="display:none">
+      <label>Max distance</label>
+      <input type="range" class="blob-ctrl" id="blob-connect-dist" min="50" max="600" value="200"
+        oninput="this.nextElementSibling.textContent=this.value">
+      <span class="val blob-val">200</span>
     </div>
     <div class="ctrl-row" id="trail-len-row" style="display:none">
       <label>Trail length</label>
@@ -563,6 +572,52 @@ box-shadow:0 0 8px var(–green); transition:left 0.016s linear;
       <input type="range" class="blob-ctrl" id="blob-trailfade" min="10" max="100" value="60"
         oninput="this.nextElementSibling.textContent=this.value">
       <span class="val blob-val">60</span>
+    </div>
+  </div>
+  <div class="ctrl-section">
+    <span class="ctrl-label blob-label">LABEL STYLE</span>
+    <div class="ctrl-row">
+      <label>Font</label>
+      <select id="blob-label-font">
+        <option value="'Courier New',monospace">Courier (default)</option>
+        <option value="'Orbitron',sans-serif">Orbitron</option>
+        <option value="'Share Tech Mono',monospace">Share Tech</option>
+        <option value="'VT323',monospace">VT323</option>
+        <option value="'Rajdhani',sans-serif">Rajdhani</option>
+        <option value="'Bebas Neue',sans-serif">Bebas Neue</option>
+        <option value="'Space Mono',monospace">Space Mono</option>
+        <option value="Arial,sans-serif">Arial</option>
+        <option value="serif">Serif</option>
+      </select>
+    </div>
+    <div class="ctrl-row">
+      <label>Format</label>
+      <select id="blob-label-format" onchange="document.getElementById('blob-custom-text-row').style.display=this.value==='custom'?'flex':'none'">
+        <option value="id">ID only (#1)</option>
+        <option value="custom">Custom text</option>
+        <option value="id-size">ID + size</option>
+        <option value="dot">Dot only</option>
+      </select>
+    </div>
+    <div class="ctrl-row">
+      <label>Style</label>
+      <select id="blob-label-style">
+        <option value="text">Plain text</option>
+        <option value="box">Box</option>
+        <option value="pill">Pill</option>
+        <option value="outline">Outline box</option>
+      </select>
+    </div>
+    <div class="ctrl-row">
+      <label>Size</label>
+      <input type="range" class="blob-ctrl" id="blob-label-size" min="8" max="48" value="14"
+        oninput="this.nextElementSibling.textContent=this.value">
+      <span class="val blob-val">14</span>
+    </div>
+    <div class="ctrl-row" id="blob-custom-text-row" style="display:none">
+      <label>Text</label>
+      <input type="text" id="blob-custom-text" value="TARGET"
+        style="flex:1;background:#111;color:#00c8ff;border:1px solid #333;font-family:'Courier New',monospace;font-size:11px;padding:4px 6px;border-radius:2px;">
     </div>
   </div>
   <div class="ctrl-section">
@@ -687,7 +742,7 @@ let opts = {
   lineScroll: false, lineWave: false, linePulse: false,
   lineGlow: false, lineInvert: false,
   segCut: false, segInvert: false, segShow: false,
-  blobTrails: false, blobLabel: false, blobInvert: false, blobGlow: false
+  blobTrails: false, blobLabel: false, blobInvert: false, blobGlow: false, blobConnect: false
 };
 
 // Source — 'camera' or 'file'
@@ -1057,6 +1112,9 @@ function toggleOpt(btn, key) {
     document.getElementById('trail-len-row').style.display  = opts[key]?'flex':'none';
     document.getElementById('trail-fade-row').style.display = opts[key]?'flex':'none';
   }
+  if (key==='blobConnect') {
+    document.getElementById('connect-dist-row').style.display = opts[key]?'flex':'none';
+  }
   if (key==='scanCut' && opts[key] && !segmentor) initSegmentor();
 }
 
@@ -1067,7 +1125,7 @@ function initSegmentor() {
     segmentor = new SelfieSegmentation({
       locateFile: f=>`https://unpkg.com/@mediapipe/selfie_segmentation@0.1.1675465747/${f}`
     });
-    segmentor.setOptions({modelSelection:1, selfieMode:false});
+    segmentor.setOptions({modelSelection:0, selfieMode:true});
     segmentor.onResults(onSegResults);
     segmentor.initialize().then(()=>{
       segReady=true; setSeg('ready ✓','#00ff41');
@@ -1205,8 +1263,8 @@ function loop(ts) {
   if (!activeVid || activeVid.readyState < 2) return;
   if (!output.width || !output.height) return;
 
-  // throttle
-  if (ts - lastFrameTime < TARGET_INTERVAL) return;
+  // throttle — skip during recording so captureStream gets every frame
+  if (!isRecording && !isRendering && ts - lastFrameTime < TARGET_INTERVAL) return;
   lastFrameTime = ts;
 
   // fps counter
@@ -1222,7 +1280,7 @@ function loop(ts) {
   // Feed segmentor async every 3 frames when subject cut is active (mediapipe only)
   if ((opts.segCut || opts.segShow || opts.scanCut) && document.getElementById('seg-method').value === 'mediapipe') {
     segSendCounter++;
-    if (segSendCounter % 2 === 0) sendToSegmentor();
+    if (segSendCounter % 1 === 0) sendToSegmentor();
   }
 
   if      (mode === 'scan') { resetCtx(); drawScan(vw, vh); }
@@ -1830,28 +1888,103 @@ function drawBlob(vw, vh) {
     }
 
     if (opts.blobLabel) {
+      const labelFormat = document.getElementById('blob-label-format').value;
+      const labelStyle  = document.getElementById('blob-label-style').value;
+      const labelSize   = parseInt(document.getElementById('blob-label-size').value);
+      const labelFont   = document.getElementById('blob-label-font').value;
+      const customText  = document.getElementById('blob-custom-text').value || 'TARGET';
+
+      // Build label text
+      let labelText;
+      if      (labelFormat === 'id')      labelText = `#${b.id}`;
+      else if (labelFormat === 'custom')  labelText = customText;
+      else if (labelFormat === 'id-size') labelText = `#${b.id} ${Math.round(Math.sqrt(b.count))}px`;
+      else                                labelText = '●';
+
+      outCtx.font = `bold ${labelSize}px ${labelFont}`;
       outCtx.shadowBlur = 0;
-      outCtx.fillStyle = blobHex;
-      outCtx.font = `bold ${Math.round(lineWidth*5+8)}px Courier New`;
-      outCtx.fillText(`#${b.id}`, b.minX+3, b.minY - 4);
-      if (opts.blobGlow) { outCtx.shadowColor=blobHex; outCtx.shadowBlur=14; }
+
+      const tx = b.minX + 3;
+      const ty = b.minY - 6;
+      const metrics = outCtx.measureText(labelText);
+      const tw = metrics.width;
+      const th = labelSize;
+      const pad = labelSize * 0.35;
+
+      if (labelStyle === 'box') {
+        outCtx.fillStyle = blobHex;
+        outCtx.fillRect(tx - pad, ty - th, tw + pad*2, th + pad);
+        outCtx.fillStyle = '#000';
+        outCtx.fillText(labelText, tx, ty);
+      } else if (labelStyle === 'pill') {
+        const r = (th + pad) / 2;
+        const px2 = tx - pad, py2 = ty - th, pw = tw + pad*2, ph = th + pad;
+        outCtx.fillStyle = blobHex;
+        outCtx.beginPath();
+        outCtx.roundRect ? outCtx.roundRect(px2, py2, pw, ph, r)
+          : outCtx.rect(px2, py2, pw, ph);
+        outCtx.fill();
+        outCtx.fillStyle = '#000';
+        outCtx.fillText(labelText, tx, ty);
+      } else if (labelStyle === 'outline') {
+        outCtx.strokeStyle = blobHex;
+        outCtx.lineWidth = 1;
+        outCtx.strokeRect(tx - pad, ty - th, tw + pad*2, th + pad);
+        outCtx.fillStyle = blobHex;
+        outCtx.fillText(labelText, tx, ty);
+      } else {
+        // plain text
+        outCtx.fillStyle = blobHex;
+        outCtx.fillText(labelText, tx, ty);
+      }
+
+      if (opts.blobGlow) { outCtx.shadowColor = blobHex; outCtx.shadowBlur = 14; }
     }
 
     if (opts.blobTrails && blobTrails[b.id] && blobTrails[b.id].length > 1) {
       const trail = blobTrails[b.id];
+      // Draw as single polyline — one beginPath/stroke instead of one per segment
+      outCtx.beginPath();
+      outCtx.moveTo(trail[0].x, trail[0].y);
       for (let t = 1; t < trail.length; t++) {
-        outCtx.strokeStyle = `rgba(${br},${bg2g},${bb},${(t/trail.length)*trailFade})`;
-        outCtx.shadowBlur  = opts.blobGlow ? 6 : 0;
-        outCtx.beginPath();
-        outCtx.moveTo(trail[t-1].x, trail[t-1].y);
-        outCtx.lineTo(trail[t].x,   trail[t].y);
-        outCtx.stroke();
+        outCtx.lineTo(trail[t].x, trail[t].y);
       }
+      outCtx.strokeStyle = `rgba(${br},${bg2g},${bb},${trailFade})`;
+      outCtx.shadowBlur  = opts.blobGlow ? 6 : 0;
+      outCtx.stroke();
       outCtx.strokeStyle = blobHex;
+      outCtx.shadowBlur  = 0;
     }
   }
 
   outCtx.shadowBlur = 0;
+
+  // ── Connect — draw lines between nearby blobs ─────────────
+  if (opts.blobConnect && newBlobs.length > 1) {
+    const maxDist = parseInt(document.getElementById('blob-connect-dist').value);
+    outCtx.strokeStyle = blobHex;
+    outCtx.lineWidth   = lineWidth * 0.5;
+    if (opts.blobGlow) { outCtx.shadowColor = blobHex; outCtx.shadowBlur = 8; }
+
+    for (let i = 0; i < newBlobs.length; i++) {
+      for (let j = i + 1; j < newBlobs.length; j++) {
+        const dx = newBlobs[i].cx - newBlobs[j].cx;
+        const dy = newBlobs[i].cy - newBlobs[j].cy;
+        const dist = Math.sqrt(dx*dx + dy*dy);
+        if (dist <= maxDist) {
+          // Fade line based on distance
+          const alpha = 1 - (dist / maxDist);
+          outCtx.strokeStyle = `rgba(${br},${bg2g},${bb},${alpha})`;
+          outCtx.beginPath();
+          outCtx.moveTo(newBlobs[i].cx, newBlobs[i].cy);
+          outCtx.lineTo(newBlobs[j].cx, newBlobs[j].cy);
+          outCtx.stroke();
+        }
+      }
+    }
+    outCtx.shadowBlur = 0;
+  }
+
   setStatus(`◎ ${newBlobs.length} blob${newBlobs.length!==1?'s':''} — move to calibrate`);
 }
 
