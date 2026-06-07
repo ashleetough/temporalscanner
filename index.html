@@ -252,9 +252,11 @@
 
     <!-- Tab bar floats top -->
     <div id="tabs">
-      <button class="tab-btn active" id="tab-scan" onclick="setMode('scan')">◉ SLIT-SCAN</button>
-      <button class="tab-btn"        id="tab-line" onclick="setMode('line')">⊗ LINE RENDER</button>
-      <button class="tab-btn"        id="tab-blob" onclick="setMode('blob')">◎ BLOB TRACK</button>
+      <button class="tab-btn active" id="tab-scan" onclick="setMode('scan')">◉ SCAN</button>
+      <button class="tab-btn"        id="tab-line" onclick="setMode('line')">⊗ LINE</button>
+      <button class="tab-btn"        id="tab-blob" onclick="setMode('blob')">◎ BLOB</button>
+      <button class="tab-btn"        id="tab-ascii" onclick="setMode('ascii')">▓ ASCII</button>
+      <button class="tab-btn"        id="tab-mosh" onclick="setMode('mosh')">⌀ MOSH</button>
     </div>
 
     <!-- Overlay buttons -->
@@ -489,6 +491,91 @@
           <div class="ctrl-row">
             <button onclick="clearTouchSeed()" style="flex:1;padding:7px;background:transparent;color:#666;border:1px solid #333;font-family:'Courier New',monospace;font-size:9px;letter-spacing:1px;border-radius:2px;cursor:pointer;">✕ CLEAR SELECTION</button>
           </div>
+        </div>
+      </div>
+    </div>
+
+
+    <!-- ASCII controls -->
+    <div id="ctrl-ascii" style="display:none">
+      <div class="ctrl-section">
+        <span class="ctrl-label" style="color:#00ff41;border-bottom-color:#004422">ASCII SETTINGS</span>
+        <div class="ctrl-row">
+          <label>Cell size</label>
+          <input type="range" id="ascii-size" min="4" max="32" value="10"
+            oninput="this.nextElementSibling.textContent=this.value">
+          <span class="val">10</span>
+        </div>
+        <div class="ctrl-row">
+          <label>Density</label>
+          <select id="ascii-charset">
+            <option value="simple"> .:-=+*#@</option>
+            <option value="blocks">░▒▓█</option>
+            <option value="binary">01</option>
+            <option value="hex">0123456789ABCDEF</option>
+            <option value="katakana">ｦｧｨｩｪｫｬｭｮｯｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜﾝ</option>
+          </select>
+        </div>
+        <div class="ctrl-row">
+          <label>Colour mode</label>
+          <select id="ascii-colormode">
+            <option value="green">Phosphor green</option>
+            <option value="amber">Phosphor amber</option>
+            <option value="white">White</option>
+            <option value="source">From video</option>
+            <option value="invert">Inverted source</option>
+          </select>
+        </div>
+        <div class="ctrl-row">
+          <label>BG colour</label>
+          <input type="color" id="ascii-bg" value="#000000"
+            style="flex:0 0 40px;height:28px;border:1px solid #333;background:transparent;cursor:pointer;padding:2px;">
+          <label style="width:auto;flex:1">Contrast</label>
+          <input type="range" id="ascii-contrast" min="50" max="200" value="100"
+            oninput="this.nextElementSibling.textContent=this.value" style="flex:1">
+          <span class="val">100</span>
+        </div>
+        <div class="toggle-row">
+          <button class="tog-btn" id="tog-ascii-bold" onclick="toggleOpt(this,'asciiBold')">◈ BOLD</button>
+          <button class="tog-btn" id="tog-ascii-invert" onclick="toggleOpt(this,'asciiInvert')">◈ INVERT</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MOSH controls -->
+    <div id="ctrl-mosh" style="display:none">
+      <div class="ctrl-section">
+        <span class="ctrl-label" style="color:#aa44ff;border-bottom-color:#220044">DATAMOSH</span>
+        <div class="ctrl-row">
+          <label>Blend</label>
+          <input type="range" id="mosh-blend" min="1" max="99" value="85"
+            oninput="this.nextElementSibling.textContent=this.value">
+          <span class="val">85</span>
+        </div>
+        <div class="ctrl-row">
+          <label>Threshold</label>
+          <input type="range" id="mosh-thresh" min="1" max="80" value="20"
+            oninput="this.nextElementSibling.textContent=this.value">
+          <span class="val">20</span>
+        </div>
+        <div class="ctrl-row">
+          <label>Glitch amt</label>
+          <input type="range" id="mosh-glitch" min="0" max="40" value="8"
+            oninput="this.nextElementSibling.textContent=this.value">
+          <span class="val">8</span>
+        </div>
+        <div class="ctrl-row">
+          <label>Colour drift</label>
+          <input type="range" id="mosh-drift" min="0" max="20" value="4"
+            oninput="this.nextElementSibling.textContent=this.value">
+          <span class="val">4</span>
+        </div>
+        <div class="toggle-row">
+          <button class="tog-btn" id="tog-mosh-freeze" onclick="moshFreeze()">◈ FREEZE FRAME</button>
+          <button class="tog-btn" id="tog-mosh-glitch" onclick="toggleOpt(this,'moshGlitch')">◈ BLOCK GLITCH</button>
+        </div>
+        <div class="ctrl-row">
+          <button onclick="resetMosh()" style="flex:1;padding:7px;background:transparent;color:#666;border:1px solid #333;font-family:'Courier New',monospace;font-size:9px;letter-spacing:1px;border-radius:2px;cursor:pointer;">↺ RESET KEYFRAME</button>
         </div>
       </div>
     </div>
@@ -737,7 +824,8 @@ let opts = {
   lineScroll: false, lineWave: false, linePulse: false,
   lineGlow: false, lineInvert: false,
   segCut: false, segInvert: false, segShow: false,
-  blobTrails: false, blobLabel: false, blobInvert: false, blobGlow: false, blobConnect: false
+  blobTrails: false, blobLabel: false, blobInvert: false, blobGlow: false, blobConnect: false,
+  asciiBold: false, asciiInvert: false, moshGlitch: false
 };
 
 // Source — 'camera' or 'file'
@@ -1072,16 +1160,21 @@ function resetScan() {
   if (typeof drawLineRender!=='undefined') drawLineRender._prevDepth=null;
   focusMaskPrev=null; touchMaskPrev=null; touchMaskCur=null;
   segMask=null; segMaskSmoothed=null;
+  moshKeyframe=null; moshPrevFrame=null;
 }
 
 function setMode(m) {
   mode = m;
-  document.getElementById('ctrl-scan').style.display = m==='scan'?'block':'none';
-  document.getElementById('ctrl-line').style.display = m==='line'?'block':'none';
-  document.getElementById('ctrl-blob').style.display = m==='blob'?'block':'none';
-  document.getElementById('tab-scan').className = 'tab-btn'+(m==='scan'?' active':'');
-  document.getElementById('tab-line').className = 'tab-btn'+(m==='line'?' active line':'');
-  document.getElementById('tab-blob').className = 'tab-btn'+(m==='blob'?' active blob':'');
+  document.getElementById('ctrl-scan').style.display  = m==='scan' ?'block':'none';
+  document.getElementById('ctrl-line').style.display  = m==='line' ?'block':'none';
+  document.getElementById('ctrl-blob').style.display  = m==='blob' ?'block':'none';
+  document.getElementById('ctrl-ascii').style.display = m==='ascii'?'block':'none';
+  document.getElementById('ctrl-mosh').style.display  = m==='mosh' ?'block':'none';
+  document.getElementById('tab-scan').className  = 'tab-btn'+(m==='scan' ?' active':'');
+  document.getElementById('tab-line').className  = 'tab-btn'+(m==='line' ?' active line':'');
+  document.getElementById('tab-blob').className  = 'tab-btn'+(m==='blob' ?' active blob':'');
+  document.getElementById('tab-ascii').className = 'tab-btn'+(m==='ascii'?' active':'');
+  document.getElementById('tab-mosh').className  = 'tab-btn'+(m==='mosh' ?' active':'');
   const cursor = document.getElementById('scan-cursor');
   cursor.style.display = m==='scan'?'block':'none';
   document.getElementById('drawer').classList.add('open');
@@ -1278,9 +1371,11 @@ function loop(ts) {
     if (segSendCounter % 1 === 0) sendToSegmentor();
   }
 
-  if      (mode === 'scan') { resetCtx(); drawScan(vw, vh); }
-  else if (mode === 'line') { resetCtx(); drawLineRender(vw, vh); }
-  else if (mode === 'blob') { resetCtx(); drawBlob(vw, vh); }
+  if      (mode === 'scan')  { resetCtx(); drawScan(vw, vh); }
+  else if (mode === 'line')  { resetCtx(); drawLineRender(vw, vh); }
+  else if (mode === 'blob')  { resetCtx(); drawBlob(vw, vh); }
+  else if (mode === 'ascii') { resetCtx(); drawAscii(vw, vh); }
+  else if (mode === 'mosh')  { resetCtx(); drawMosh(vw, vh); }
 
   frameCount++;
 }
@@ -1981,6 +2076,153 @@ function drawBlob(vw, vh) {
   }
 
   setStatus(`◎ ${newBlobs.length} blob${newBlobs.length!==1?'s':''} — move to calibrate`);
+}
+
+// ── ASCII renderer ────────────────────────────────────────────
+function drawAscii(vw, vh) {
+  const cellSize   = parseInt(document.getElementById('ascii-size').value);
+  const charset    = document.getElementById('ascii-charset').value;
+  const colorMode  = document.getElementById('ascii-colormode').value;
+  const bgHex      = document.getElementById('ascii-bg').value;
+  const contrast   = parseInt(document.getElementById('ascii-contrast').value) / 100;
+  const bold       = opts.asciiBold;
+  const invert     = opts.asciiInvert;
+
+  const charsets = {
+    simple:   ' .:-=+*#@',
+    blocks:   ' ░▒▓█',
+    binary:   ' 01',
+    hex:      ' 0123456789ABCDEF',
+    katakana: ' ｦｧｨｩｪｫｬｭｮｯｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜﾝ'
+  };
+  const chars = charsets[charset] || charsets.simple;
+  const cols  = Math.floor(vw / cellSize);
+  const rows  = Math.floor(vh / cellSize);
+
+  // Sample video at low res
+  tmpCtx.drawImage(getActiveVideo(), 0, 0, cols, rows);
+  const px = tmpCtx.getImageData(0, 0, cols, rows).data;
+
+  outCtx.fillStyle = bgHex;
+  outCtx.fillRect(0, 0, vw, vh);
+  outCtx.font = `${bold?'bold ':''}${cellSize}px 'Courier New',monospace`;
+  outCtx.textBaseline = 'top';
+
+  for (let row = 0; row < rows; row++) {
+    for (let col = 0; col < cols; col++) {
+      const i = (row * cols + col) * 4;
+      const r = px[i], g = px[i+1], b = px[i+2];
+      let luma = (r * 0.299 + g * 0.587 + b * 0.114) / 255;
+      luma = Math.min(1, luma * contrast);
+      if (invert) luma = 1 - luma;
+      const charIdx = Math.floor(luma * (chars.length - 1));
+      const ch = chars[charIdx];
+      if (!ch || ch === ' ') continue;
+
+      if      (colorMode === 'green')  outCtx.fillStyle = `rgb(0,${Math.round(luma*255)},${Math.round(luma*65)})`;
+      else if (colorMode === 'amber')  outCtx.fillStyle = `rgb(${Math.round(luma*255)},${Math.round(luma*170)},0)`;
+      else if (colorMode === 'white')  outCtx.fillStyle = `rgb(${Math.round(luma*255)},${Math.round(luma*255)},${Math.round(luma*255)})`;
+      else if (colorMode === 'source') outCtx.fillStyle = `rgb(${r},${g},${b})`;
+      else                             outCtx.fillStyle = `rgb(${255-r},${255-g},${255-b})`;
+
+      outCtx.fillText(ch, col * cellSize, row * cellSize);
+    }
+  }
+}
+
+// ── Datamosh ──────────────────────────────────────────────────
+let moshKeyframe  = null;  // frozen reference frame
+let moshPrevFrame = null;  // previous frame for diff
+let moshCanvas    = null, moshCtx = null;
+
+function resetMosh() {
+  moshKeyframe = null;
+  moshPrevFrame = null;
+  document.getElementById('tog-mosh-freeze').classList.remove('on');
+  setStatus('⌀ keyframe reset');
+}
+
+function moshFreeze() {
+  // Capture current frame as keyframe
+  if (!moshCanvas) {
+    moshCanvas = document.createElement('canvas');
+    moshCanvas.width = output.width; moshCanvas.height = output.height;
+    moshCtx = moshCanvas.getContext('2d');
+  }
+  moshCtx.drawImage(getActiveVideo(), 0, 0, output.width, output.height);
+  moshKeyframe = moshCtx.getImageData(0, 0, output.width, output.height);
+  document.getElementById('tog-mosh-freeze').classList.add('on');
+  setStatus('⌀ keyframe frozen');
+}
+
+function drawMosh(vw, vh) {
+  const blend   = parseInt(document.getElementById('mosh-blend').value) / 100;
+  const thresh  = parseInt(document.getElementById('mosh-thresh').value);
+  const glitchAmt = parseInt(document.getElementById('mosh-glitch').value);
+  const drift   = parseInt(document.getElementById('mosh-drift').value);
+
+  // Ensure mosh canvas is right size
+  if (!moshCanvas || moshCanvas.width !== vw || moshCanvas.height !== vh) {
+    moshCanvas = document.createElement('canvas');
+    moshCanvas.width = vw; moshCanvas.height = vh;
+    moshCtx = moshCanvas.getContext('2d');
+  }
+
+  // Get current frame
+  moshCtx.drawImage(getActiveVideo(), 0, 0, vw, vh);
+  const curFrame = moshCtx.getImageData(0, 0, vw, vh);
+
+  // If no keyframe yet, use current frame
+  if (!moshKeyframe || moshKeyframe.data.length !== curFrame.data.length) {
+    moshKeyframe  = new ImageData(new Uint8ClampedArray(curFrame.data), vw, vh);
+    moshPrevFrame = new ImageData(new Uint8ClampedArray(curFrame.data), vw, vh);
+    outCtx.drawImage(getActiveVideo(), 0, 0, vw, vh);
+    return;
+  }
+
+  const out  = outCtx.createImageData(vw, vh);
+  const cur  = curFrame.data;
+  const key  = moshKeyframe.data;
+  const prev = moshPrevFrame ? moshPrevFrame.data : key;
+  const od   = out.data;
+
+  for (let i = 0; i < cur.length; i += 4) {
+    // Motion delta between current and previous frame
+    const dr = Math.abs(cur[i]   - prev[i]);
+    const dg = Math.abs(cur[i+1] - prev[i+1]);
+    const db = Math.abs(cur[i+2] - prev[i+2]);
+    const motion = (dr + dg + db) / 3;
+
+    if (motion > thresh) {
+      // Moving pixel — blend current with keyframe, add colour drift
+      od[i]   = Math.round(key[i]   * blend + cur[i]   * (1-blend)) + (drift > 0 ? (Math.random()*drift*2-drift) : 0);
+      od[i+1] = Math.round(key[i+1] * blend + cur[i+1] * (1-blend));
+      od[i+2] = Math.round(key[i+2] * blend + cur[i+2] * (1-blend)) + (drift > 0 ? (Math.random()*drift*2-drift) : 0);
+      od[i+3] = 255;
+    } else {
+      // Static pixel — show keyframe
+      od[i]   = key[i];
+      od[i+1] = key[i+1];
+      od[i+2] = key[i+2];
+      od[i+3] = 255;
+    }
+  }
+
+  outCtx.putImageData(out, 0, 0);
+
+  // Block glitch — randomly displace horizontal strips
+  if (opts.moshGlitch && glitchAmt > 0 && Math.random() < 0.3) {
+    const stripH = Math.floor(vh / 20);
+    const strips = Math.floor(Math.random() * 4) + 1;
+    for (let s = 0; s < strips; s++) {
+      const y     = Math.floor(Math.random() * (vh - stripH));
+      const shift = Math.floor(Math.random() * glitchAmt * 2 - glitchAmt);
+      outCtx.drawImage(output, 0, y, vw, stripH, shift, y, vw, stripH);
+    }
+  }
+
+  // Store current as previous for next frame
+  moshPrevFrame = new ImageData(new Uint8ClampedArray(curFrame.data), vw, vh);
 }
 
 // ── Recording ─────────────────────────────────────────────────
