@@ -852,6 +852,10 @@ let touchMaskPrev   = null;  // temporal buffer
 let touchMaskCur    = null;  // current computed mask
 
 // ── Camera ────────────────────────────────────────────────────
+function showPerm() {
+  document.getElementById('perm-screen').style.display = 'flex';
+}
+
 function showCameraError(e) {
   var name = e.name || '';
   var msg;
