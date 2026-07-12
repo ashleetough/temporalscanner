@@ -207,7 +207,7 @@
 </head>
 <body>
 
-<div id="pin-screen" style="position:fixed;inset:0;background:#000;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;z-index:200;font-family:'Courier New',monospace;">
+<div id="pin-screen" style="position:fixed;inset:0;background:#000;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;z-index:200;font-family:'Courier New',monospace;transition:opacity 0.3s;">
   <div style="color:#00ff41;font-size:13px;letter-spacing:3px;">⌛ TEMPORAL PRINTER</div>
   <div style="color:#444;font-size:9px;letter-spacing:2px;">PHOSFEIN DESIGN</div>
   <div id="pin-dots" style="display:flex;gap:12px;margin:8px 0;">
@@ -892,7 +892,8 @@ function updatePinDots() {
 
 function checkPin() {
   if (pinEntry === PIN) {
-    document.getElementById('pin-screen').style.display = 'none';
+    var ps = document.getElementById('pin-screen');
+    ps.parentNode.removeChild(ps);
   } else {
     var dots = document.getElementById('pin-dots').children;
     for (var i = 0; i < dots.length; i++) {
