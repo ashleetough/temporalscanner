@@ -61,8 +61,8 @@
     padding:10px 10px 20px;
   }
   .tab-btn {
-    flex:1; padding:8px 4px; font-family:'Courier New',monospace;
-    font-size:9px; letter-spacing:1px; text-align:center;
+    flex:1; padding:8px 2px; font-family:'Courier New',monospace;
+    font-size:8px; letter-spacing:0px; text-align:center;
     background:#00000077; border:1px solid #333; color:#555;
     border-radius:3px; cursor:pointer; transition:all .15s;
   }
@@ -252,9 +252,12 @@
 
     <!-- Tab bar floats top -->
     <div id="tabs">
-      <button class="tab-btn active" id="tab-scan" onclick="setMode('scan')">◉ SLIT-SCAN</button>
-      <button class="tab-btn"        id="tab-line" onclick="setMode('line')">⊗ LINE RENDER</button>
-      <button class="tab-btn"        id="tab-blob" onclick="setMode('blob')">◎ BLOB TRACK</button>
+      <button class="tab-btn active" id="tab-scan" onclick="setMode('scan')">◉ SCAN</button>
+      <button class="tab-btn"        id="tab-line" onclick="setMode('line')">⊗ LINE</button>
+      <button class="tab-btn"        id="tab-blob" onclick="setMode('blob')">◎ BLOB</button>
+      <button class="tab-btn"        id="tab-ascii" onclick="setMode('ascii')">▓ ASCII</button>
+      <button class="tab-btn"        id="tab-dither" onclick="setMode('dither')">⣿ DITH</button>
+      <button class="tab-btn"        id="tab-motion" onclick="setMode('motion')">◌ MOTION</button>
     </div>
 
     <!-- Overlay buttons -->
@@ -489,6 +492,205 @@
           <div class="ctrl-row">
             <button onclick="clearTouchSeed()" style="flex:1;padding:7px;background:transparent;color:#666;border:1px solid #333;font-family:'Courier New',monospace;font-size:9px;letter-spacing:1px;border-radius:2px;cursor:pointer;">✕ CLEAR SELECTION</button>
           </div>
+        </div>
+      </div>
+    </div>
+
+
+    <!-- ASCII controls -->
+    <div id="ctrl-ascii" style="display:none">
+      <div class="ctrl-section">
+        <span class="ctrl-label" style="color:#00ff41;border-bottom-color:#004422">ASCII SETTINGS</span>
+        <div class="ctrl-row">
+          <label>Cell size</label>
+          <input type="range" id="ascii-size" min="4" max="32" value="10"
+            oninput="this.nextElementSibling.textContent=this.value">
+          <span class="val">10</span>
+        </div>
+        <div class="ctrl-row">
+          <label>Density</label>
+          <select id="ascii-charset" onchange="document.getElementById('ascii-custom-row').style.display=this.value==='custom'?'flex':'none'">
+            <option value="simple"> .:-=+*#@</option>
+            <option value="blocks">░▒▓█</option>
+            <option value="binary">01</option>
+            <option value="hex">0123456789ABCDEF</option>
+            <option value="katakana">ｦｧｨｩｪｫｬｭｮｯｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜﾝ</option>
+            <option value="custom">Custom…</option>
+          </select>
+        </div>
+        <div class="ctrl-row" id="ascii-custom-row" style="display:none">
+          <label>Characters</label>
+          <input type="text" id="ascii-custom-chars" value=" .:#@"
+            style="flex:1;background:#111;color:#00ff41;border:1px solid #333;font-family:'Courier New',monospace;font-size:11px;padding:4px 6px;border-radius:2px;"
+            placeholder="light → dark chars">
+        </div>
+        <div class="ctrl-row">
+          <label>Colour mode</label>
+          <select id="ascii-colormode">
+            <option value="green">Phosphor green</option>
+            <option value="amber">Phosphor amber</option>
+            <option value="white">White</option>
+            <option value="source">From video</option>
+            <option value="invert">Inverted source</option>
+          </select>
+        </div>
+        <div class="ctrl-row">
+          <label>BG colour</label>
+          <input type="color" id="ascii-bg" value="#000000"
+            style="flex:0 0 40px;height:28px;border:1px solid #333;background:transparent;cursor:pointer;padding:2px;">
+          <label style="width:auto;flex:1">Contrast</label>
+          <input type="range" id="ascii-contrast" min="50" max="200" value="100"
+            oninput="this.nextElementSibling.textContent=this.value" style="flex:1">
+          <span class="val">100</span>
+        </div>
+        <div class="toggle-row">
+          <button class="tog-btn" id="tog-ascii-bold" onclick="toggleOpt(this,'asciiBold')">◈ BOLD</button>
+          <button class="tog-btn" id="tog-ascii-invert" onclick="toggleOpt(this,'asciiInvert')">◈ INVERT</button>
+        </div>
+      </div>
+    </div>
+
+
+    <!-- DITHER controls -->
+    <div id="ctrl-dither" style="display:none">
+      <div class="ctrl-section">
+        <span class="ctrl-label" style="color:#aa44ff;border-bottom-color:#220044">DITHER</span>
+        <div class="ctrl-row">
+          <label>Style</label>
+          <select id="dither-style" onchange="onDitherStyleChange()">
+            <option value="floyd">Floyd-Steinberg</option>
+            <option value="bayer2">Bayer 2×2</option>
+            <option value="bayer4">Bayer 4×4</option>
+            <option value="bayer8">Bayer 8×8</option>
+            <option value="halftone">Halftone dots</option>
+            <option value="random">Random noise</option>
+            <option value="animated">Animated noise</option>
+            <option value="crosshatch">Crosshatch</option>
+            <option value="palette">Palette</option>
+            <option value="duotone">Duotone</option>
+          </select>
+        </div>
+        <div class="ctrl-row">
+          <label>Colour mode</label>
+          <select id="dither-color">
+            <option value="bw">Black & white</option>
+            <option value="green">Phosphor green</option>
+            <option value="amber">Phosphor amber</option>
+            <option value="source">From video</option>
+            <option value="2bit">2-bit colour</option>
+          </select>
+        </div>
+        <!-- Palette selector — shown only for palette mode -->
+        <div id="dither-palette-row" class="ctrl-row" style="display:none">
+          <label>Palette</label>
+          <select id="dither-palette">
+            <option value="gameboy">Game Boy</option>
+            <option value="gameboy-pocket">GB Pocket</option>
+            <option value="cga">CGA (4 colour)</option>
+            <option value="nes">NES</option>
+            <option value="c64">C64</option>
+            <option value="pico8">PICO-8</option>
+          </select>
+        </div>
+        <!-- Duotone colours — shown only for duotone mode -->
+        <div id="dither-duotone-row" class="ctrl-row" style="display:none">
+          <label>Shadow</label>
+          <input type="color" id="dither-shadow" value="#0d0221"
+            style="flex:0 0 40px;height:28px;border:1px solid #333;background:transparent;cursor:pointer;padding:2px;">
+          <label style="width:auto;flex:1">Highlight</label>
+          <input type="color" id="dither-highlight" value="#ff6fff"
+            style="flex:0 0 40px;height:28px;border:1px solid #333;background:transparent;cursor:pointer;padding:2px;">
+        </div>
+        <div class="ctrl-row">
+          <label>Threshold</label>
+          <input type="range" id="dither-thresh" min="0" max="255" value="128"
+            oninput="this.nextElementSibling.textContent=this.value">
+          <span class="val">128</span>
+        </div>
+        <div class="ctrl-row">
+          <label>Scale</label>
+          <input type="range" id="dither-scale" min="1" max="8" value="1"
+            oninput="this.nextElementSibling.textContent=this.value">
+          <span class="val">1</span>
+        </div>
+        <div class="ctrl-row">
+          <label>Contrast</label>
+          <input type="range" id="dither-contrast" min="50" max="250" value="120"
+            oninput="this.nextElementSibling.textContent=this.value">
+          <span class="val">120</span>
+        </div>
+        <div class="toggle-row">
+          <button class="tog-btn" id="tog-dither-invert" onclick="toggleOpt(this,'ditherInvert')">◈ INVERT</button>
+          <button class="tog-btn" id="tog-dither-glow"   onclick="toggleOpt(this,'ditherGlow')">◈ GLOW</button>
+        </div>
+      </div>
+    </div>
+
+
+    <!-- MOTION controls -->
+    <div id="ctrl-motion" style="display:none">
+      <div class="ctrl-section">
+        <span class="ctrl-label" style="color:#aa44ff;border-bottom-color:#220044">DETECTION</span>
+        <div class="ctrl-row">
+          <label>Threshold</label>
+          <input type="range" id="mot-thresh" min="1" max="80" value="20"
+            oninput="this.nextElementSibling.textContent=this.value">
+          <span class="val">20</span>
+        </div>
+        <div class="ctrl-row">
+          <label>Sensitivity</label>
+          <input type="range" id="mot-sens" min="1" max="10" value="3"
+            oninput="this.nextElementSibling.textContent=this.value">
+          <span class="val">3</span>
+        </div>
+        <div class="ctrl-row">
+          <label>Feather</label>
+          <input type="range" id="mot-feather" min="0" max="10" value="2"
+            oninput="this.nextElementSibling.textContent=this.value">
+          <span class="val">2</span>
+        </div>
+        <div class="toggle-row">
+          <button class="tog-btn" id="tog-mot-map" onclick="toggleOpt(this,'motShowMap')">◈ SHOW MAP</button>
+          <button class="tog-btn" id="tog-mot-reset" onclick="motResetBg()">↺ RESET BG</button>
+        </div>
+      </div>
+      <div class="ctrl-section">
+        <span class="ctrl-label" style="color:#aa44ff;border-bottom-color:#220044">STYLE</span>
+        <div class="ctrl-row">
+          <label>Grade</label>
+          <select id="mot-grade">
+            <option value="source">Raw colour</option>
+            <option value="green">Phosphor green</option>
+            <option value="amber">Phosphor amber</option>
+            <option value="bw">B&W</option>
+            <option value="thermal">Thermal</option>
+            <option value="invert">Invert</option>
+          </select>
+        </div>
+        <div class="ctrl-row">
+          <label>Add-on effect</label>
+          <select id="mot-effect">
+            <option value="none">None (raw pixels)</option>
+            <option value="lines">Line render</option>
+            <option value="ascii">ASCII</option>
+            <option value="dither">Dither</option>
+          </select>
+        </div>
+        <div class="ctrl-row">
+          <label>Trail decay</label>
+          <input type="range" id="mot-decay" min="0" max="98" value="0"
+            oninput="this.nextElementSibling.textContent=this.value">
+          <span class="val">0</span>
+        </div>
+        <div class="ctrl-row">
+          <label>BG blend</label>
+          <input type="range" id="mot-bgblend" min="0" max="80" value="0"
+            oninput="this.nextElementSibling.textContent=this.value">
+          <span class="val">0</span>
+        </div>
+        <div class="toggle-row">
+          <button class="tog-btn" id="tog-mot-flow" onclick="toggleOpt(this,'motFlowArrows')">◈ FLOW ARROWS</button>
+          <button class="tog-btn" id="tog-mot-glow" onclick="toggleOpt(this,'motGlow')">◈ GLOW</button>
         </div>
       </div>
     </div>
@@ -737,7 +939,10 @@ let opts = {
   lineScroll: false, lineWave: false, linePulse: false,
   lineGlow: false, lineInvert: false,
   segCut: false, segInvert: false, segShow: false,
-  blobTrails: false, blobLabel: false, blobInvert: false, blobGlow: false, blobConnect: false
+  blobTrails: false, blobLabel: false, blobInvert: false, blobGlow: false, blobConnect: false,
+  asciiBold: false, asciiInvert: false,
+  ditherInvert: false, ditherGlow: false,
+  motShowMap: false, motFlowArrows: false, motGlow: false
 };
 
 // Source — 'camera' or 'file'
@@ -764,6 +969,10 @@ let touchMaskPrev   = null;  // temporal buffer
 let touchMaskCur    = null;  // current computed mask
 
 // ── Camera ────────────────────────────────────────────────────
+function showPerm() {
+  document.getElementById('perm-screen').style.display = 'flex';
+}
+
 function showCameraError(e) {
   var name = e.name || '';
   var msg;
@@ -1076,12 +1285,18 @@ function resetScan() {
 
 function setMode(m) {
   mode = m;
-  document.getElementById('ctrl-scan').style.display = m==='scan'?'block':'none';
-  document.getElementById('ctrl-line').style.display = m==='line'?'block':'none';
-  document.getElementById('ctrl-blob').style.display = m==='blob'?'block':'none';
-  document.getElementById('tab-scan').className = 'tab-btn'+(m==='scan'?' active':'');
-  document.getElementById('tab-line').className = 'tab-btn'+(m==='line'?' active line':'');
-  document.getElementById('tab-blob').className = 'tab-btn'+(m==='blob'?' active blob':'');
+  document.getElementById('ctrl-scan').style.display  = m==='scan' ?'block':'none';
+  document.getElementById('ctrl-line').style.display  = m==='line' ?'block':'none';
+  document.getElementById('ctrl-blob').style.display  = m==='blob' ?'block':'none';
+  document.getElementById('ctrl-ascii').style.display  = m==='ascii' ?'block':'none';
+  document.getElementById('ctrl-dither').style.display = m==='dither'?'block':'none';
+  document.getElementById('ctrl-motion').style.display = m==='motion'?'block':'none';
+  document.getElementById('tab-scan').className  = 'tab-btn'+(m==='scan' ?' active':'');
+  document.getElementById('tab-line').className  = 'tab-btn'+(m==='line' ?' active line':'');
+  document.getElementById('tab-blob').className  = 'tab-btn'+(m==='blob' ?' active blob':'');
+  document.getElementById('tab-ascii').className  = 'tab-btn'+(m==='ascii' ?' active':'');
+  document.getElementById('tab-dither').className = 'tab-btn'+(m==='dither'?' active':'');
+  document.getElementById('tab-motion').className = 'tab-btn'+(m==='motion'?' active':'');
   const cursor = document.getElementById('scan-cursor');
   cursor.style.display = m==='scan'?'block':'none';
   document.getElementById('drawer').classList.add('open');
@@ -1278,9 +1493,12 @@ function loop(ts) {
     if (segSendCounter % 1 === 0) sendToSegmentor();
   }
 
-  if      (mode === 'scan') { resetCtx(); drawScan(vw, vh); }
-  else if (mode === 'line') { resetCtx(); drawLineRender(vw, vh); }
-  else if (mode === 'blob') { resetCtx(); drawBlob(vw, vh); }
+  if      (mode === 'scan')  { resetCtx(); drawScan(vw, vh); }
+  else if (mode === 'line')  { resetCtx(); drawLineRender(vw, vh); }
+  else if (mode === 'blob')  { resetCtx(); drawBlob(vw, vh); }
+  else if (mode === 'ascii') { resetCtx(); drawAscii(vw, vh); }
+  else if (mode === 'dither') { resetCtx(); drawDither(vw, vh); }
+  else if (mode === 'motion') { drawMotion(vw, vh); }
 
   frameCount++;
 }
@@ -1983,8 +2201,578 @@ function drawBlob(vw, vh) {
   setStatus(`◎ ${newBlobs.length} blob${newBlobs.length!==1?'s':''} — move to calibrate`);
 }
 
-// ── Recording ─────────────────────────────────────────────────
-function onRecordBtn() {
+// ── ASCII renderer ────────────────────────────────────────────
+let ditherSmallCanvas = null, ditherSmallCtx = null;
+
+function getDitherCanvas(w, h) {
+  if (!ditherSmallCanvas || ditherSmallCanvas.width !== w || ditherSmallCanvas.height !== h) {
+    ditherSmallCanvas = document.createElement('canvas');
+    ditherSmallCanvas.width = w; ditherSmallCanvas.height = h;
+    ditherSmallCtx = ditherSmallCanvas.getContext('2d');
+  }
+  return [ditherSmallCanvas, ditherSmallCtx];
+}
+
+// Persistent offscreen canvas for ASCII rendering
+let asciiOffCanvas = null, asciiOffCtx = null;
+
+function drawAscii(vw, vh) {
+  const cellSize   = parseInt(document.getElementById('ascii-size').value);
+  const charset    = document.getElementById('ascii-charset').value;
+  const colorMode  = document.getElementById('ascii-colormode').value;
+  const bgHex      = document.getElementById('ascii-bg').value;
+  const contrast   = parseInt(document.getElementById('ascii-contrast').value) / 100;
+  const bold       = opts.asciiBold;
+  const invert     = opts.asciiInvert;
+
+  const charsets = {
+    simple:   ' .:-=+*#@',
+    blocks:   ' ░▒▓█',
+    binary:   ' 01',
+    hex:      ' 0123456789ABCDEF',
+    katakana: ' ｦｧｨｩｪｫｬｭｮｯｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜﾝ',
+    custom:   document.getElementById('ascii-custom-chars').value || ' .:#@'
+  };
+  const chars = charsets[charset] || charsets.simple;
+  const cols  = Math.floor(vw / cellSize);
+  const rows  = Math.floor(vh / cellSize);
+
+  // Render ASCII at native cell resolution on offscreen canvas
+  const ow = cols * cellSize, oh = rows * cellSize;
+  if (!asciiOffCanvas || asciiOffCanvas.width !== ow || asciiOffCanvas.height !== oh) {
+    asciiOffCanvas = document.createElement('canvas');
+    asciiOffCanvas.width = ow; asciiOffCanvas.height = oh;
+    asciiOffCtx = asciiOffCanvas.getContext('2d');
+  }
+
+  // Sample video at grid resolution — tiny getImageData
+  tmpCtx.drawImage(getActiveVideo(), 0, 0, cols, rows);
+  const px = tmpCtx.getImageData(0, 0, cols, rows).data;
+
+  asciiOffCtx.fillStyle = bgHex;
+  asciiOffCtx.fillRect(0, 0, ow, oh);
+  asciiOffCtx.font = `${bold?'bold ':''}${cellSize}px 'Courier New',monospace`;
+  asciiOffCtx.textBaseline = 'top';
+
+  // Batch by colour to minimise fillStyle changes
+  // For source/invert modes every pixel is different — just draw them
+  // For flat colour modes group by brightness level
+  if (colorMode === 'source' || colorMode === 'invert') {
+    for (let row = 0; row < rows; row++) {
+      for (let col = 0; col < cols; col++) {
+        const i = (row * cols + col) * 4;
+        const r = px[i], g = px[i+1], b = px[i+2];
+        let luma = (r*0.299 + g*0.587 + b*0.114) / 255;
+        luma = Math.min(1, luma * contrast);
+        if (invert) luma = 1 - luma;
+        const ch = chars[Math.floor(luma * (chars.length - 1))];
+        if (!ch || ch === ' ') continue;
+        asciiOffCtx.fillStyle = colorMode === 'source'
+          ? `rgb(${r},${g},${b})` : `rgb(${255-r},${255-g},${255-b})`;
+        asciiOffCtx.fillText(ch, col * cellSize, row * cellSize);
+      }
+    }
+  } else {
+    // Flat colour modes — quantise luma to 16 levels, batch by level
+    const LEVELS = 16;
+    const buckets = Array.from({length: LEVELS}, () => []);
+    for (let row = 0; row < rows; row++) {
+      for (let col = 0; col < cols; col++) {
+        const i = (row * cols + col) * 4;
+        const r = px[i], g = px[i+1], b = px[i+2];
+        let luma = (r*0.299 + g*0.587 + b*0.114) / 255;
+        luma = Math.min(1, luma * contrast);
+        if (invert) luma = 1 - luma;
+        const ch = chars[Math.floor(luma * (chars.length - 1))];
+        if (!ch || ch === ' ') continue;
+        const level = Math.min(LEVELS-1, Math.floor(luma * LEVELS));
+        buckets[level].push({col, row, ch, luma});
+      }
+    }
+    for (let lv = 0; lv < LEVELS; lv++) {
+      if (!buckets[lv].length) continue;
+      const luma = lv / LEVELS;
+      if      (colorMode === 'green') asciiOffCtx.fillStyle = `rgb(0,${Math.round(luma*255)},${Math.round(luma*65)})`;
+      else if (colorMode === 'amber') asciiOffCtx.fillStyle = `rgb(${Math.round(luma*255)},${Math.round(luma*170)},0)`;
+      else                            asciiOffCtx.fillStyle = `rgb(${Math.round(luma*255)},${Math.round(luma*255)},${Math.round(luma*255)})`;
+      for (const {col, row, ch} of buckets[lv]) {
+        asciiOffCtx.fillText(ch, col * cellSize, row * cellSize);
+      }
+    }
+  }
+
+  // Blit offscreen canvas to output — one drawImage call
+  outCtx.fillStyle = bgHex;
+  outCtx.fillRect(0, 0, vw, vh);
+  outCtx.drawImage(asciiOffCanvas, 0, 0, vw, vh);
+}
+
+
+// ── Dither ────────────────────────────────────────────────────
+const BAYER2 = [[ 0, 2],[ 3, 1]];
+const BAYER4 = [[ 0, 8, 2,10],[12, 4,14, 6],[ 3,11, 1, 9],[15, 7,13, 5]];
+const BAYER8 = [
+  [ 0,32, 8,40, 2,34,10,42],[48,16,56,24,50,18,58,26],
+  [12,44, 4,36,14,46, 6,38],[60,28,52,20,62,30,54,22],
+  [ 3,35,11,43, 1,33, 9,41],[51,19,59,27,49,17,57,25],
+  [15,47, 7,39,13,45, 5,37],[63,31,55,23,61,29,53,21]
+];
+let ditherNoiseT = 0;
+
+// Palettes — arrays of [r,g,b]
+const PALETTES = {
+  gameboy:        [[15,56,15],[48,98,48],[139,172,15],[155,188,15]],
+  'gameboy-pocket':[[0,0,0],[85,85,85],[170,170,170],[255,255,255]],
+  cga:            [[0,0,0],[0,170,170],[170,0,170],[170,170,170]],
+  nes:            [[0,0,0],[252,116,96],[0,128,0],[252,252,252],[0,0,252],[248,0,0],[0,252,0],[252,252,0],[0,0,0],[252,188,176],[0,116,0],[248,120,248]],
+  c64:            [[0,0,0],[255,255,255],[136,0,0],[170,255,238],[204,68,204],[0,204,85],[0,0,170],[238,238,119],[221,136,85],[102,68,0],[255,119,119],[51,51,51],[119,119,119],[170,255,102],[0,136,255],[187,187,187]],
+  pico8:          [[0,0,0],[29,43,83],[126,37,83],[0,135,81],[171,82,54],[95,87,79],[194,195,199],[255,241,232],[255,0,77],[255,163,0],[255,240,36],[0,231,86],[41,173,255],[131,118,156],[255,119,168],[255,204,170]]
+};
+
+function onDitherStyleChange() {
+  const s = document.getElementById('dither-style').value;
+  document.getElementById('dither-palette-row').style.display  = s === 'palette'  ? 'flex' : 'none';
+  document.getElementById('dither-duotone-row').style.display  = s === 'duotone'  ? 'flex' : 'none';
+}
+
+function closestPaletteColor(r, g, b, palette) {
+  let best = 0, bestDist = Infinity;
+  for (let i = 0; i < palette.length; i++) {
+    const dr = r-palette[i][0], dg = g-palette[i][1], db = b-palette[i][2];
+    const d = dr*dr + dg*dg + db*db;
+    if (d < bestDist) { bestDist = d; best = i; }
+  }
+  return palette[best];
+}
+
+function drawDither(vw, vh) {
+  const style    = document.getElementById('dither-style').value;
+  const colorMode = document.getElementById('dither-color').value;
+  const thresh   = parseInt(document.getElementById('dither-thresh').value);
+  const scale    = parseInt(document.getElementById('dither-scale').value);
+  const contrast = parseInt(document.getElementById('dither-contrast').value) / 100;
+  const invert   = opts.ditherInvert;
+
+  // Palette and duotone modes bypass normal b/w pipeline
+  if (style === 'palette') { drawPaletteDither(vw, vh, scale, contrast); return; }
+  if (style === 'duotone') { drawDuotoneDither(vw, vh, scale, contrast, thresh); return; }
+  if (style === 'animated') { ditherNoiseT += 0.5; }
+
+  const dw = Math.floor(vw / scale);
+  const dh = Math.floor(vh / scale);
+  tmpCtx.drawImage(getActiveVideo(), 0, 0, dw, dh);
+  const src = tmpCtx.getImageData(0, 0, dw, dh);
+  const sd  = src.data;
+
+  const luma = new Float32Array(dw * dh);
+  for (let i = 0; i < dw * dh; i++) {
+    let l = (sd[i*4]*0.299 + sd[i*4+1]*0.587 + sd[i*4+2]*0.114);
+    l = Math.min(255, Math.max(0, (l - 128) * contrast + 128));
+    luma[i] = invert ? 255 - l : l;
+  }
+
+  const out = new Uint8Array(dw * dh);
+
+  if (style === 'floyd') {
+    const err = new Float32Array(luma);
+    for (let y = 0; y < dh; y++) {
+      for (let x = 0; x < dw; x++) {
+        const i = y*dw+x;
+        const old = err[i];
+        const nw  = old < thresh ? 0 : 255;
+        out[i] = nw > 127 ? 1 : 0;
+        const e = old - nw;
+        if (x+1 < dw)         err[i+1]    += e * 7/16;
+        if (y+1 < dh) {
+          if (x > 0)           err[i+dw-1] += e * 3/16;
+                               err[i+dw]   += e * 5/16;
+          if (x+1 < dw)       err[i+dw+1] += e * 1/16;
+        }
+      }
+    }
+  } else if (style === 'bayer2') {
+    for (let y = 0; y < dh; y++)
+      for (let x = 0; x < dw; x++)
+        out[y*dw+x] = luma[y*dw+x] > (BAYER2[y%2][x%2]/4)*255 ? 1 : 0;
+  } else if (style === 'bayer4') {
+    for (let y = 0; y < dh; y++)
+      for (let x = 0; x < dw; x++)
+        out[y*dw+x] = luma[y*dw+x] > (BAYER4[y%4][x%4]/16)*255 ? 1 : 0;
+  } else if (style === 'bayer8') {
+    for (let y = 0; y < dh; y++)
+      for (let x = 0; x < dw; x++)
+        out[y*dw+x] = luma[y*dw+x] > (BAYER8[y%8][x%8]/64)*255 ? 1 : 0;
+  } else if (style === 'random') {
+    for (let i = 0; i < dw*dh; i++)
+      out[i] = luma[i] > Math.random()*255 ? 1 : 0;
+  } else if (style === 'animated') {
+    // Noise pattern shifts every frame
+    for (let y = 0; y < dh; y++)
+      for (let x = 0; x < dw; x++) {
+        const n = (Math.sin(x*127.1+ditherNoiseT) * Math.sin(y*311.7+ditherNoiseT*0.7)) * 0.5 + 0.5;
+        out[y*dw+x] = luma[y*dw+x] > n*255 ? 1 : 0;
+      }
+  } else if (style === 'halftone') {
+    const cell = 6;
+    for (let cy = 0; cy < dh; cy += cell) {
+      for (let cx = 0; cx < dw; cx += cell) {
+        let sum = 0, count = 0;
+        for (let dy = 0; dy < cell && cy+dy < dh; dy++)
+          for (let dx = 0; dx < cell && cx+dx < dw; dx++) {
+            sum += luma[(cy+dy)*dw+(cx+dx)]; count++;
+          }
+        const avg = sum / count;
+        const radius = (avg / 255) * (cell/2);
+        for (let dy = 0; dy < cell && cy+dy < dh; dy++)
+          for (let dx = 0; dx < cell && cx+dx < dw; dx++) {
+            const dist = Math.sqrt((dx-cell/2)**2 + (dy-cell/2)**2);
+            out[(cy+dy)*dw+(cx+dx)] = dist < radius ? 1 : 0;
+          }
+      }
+    }
+  } else if (style === 'crosshatch') {
+    // Multiple angled line passes at different densities
+    for (let y = 0; y < dh; y++) {
+      for (let x = 0; x < dw; x++) {
+        const l = luma[y*dw+x] / 255;
+        let on = false;
+        if (l > 0.75) on = true; // brightest — all off (white)
+        else if (l > 0.5)  on = ((x + y) % 4 === 0); // light hatch
+        else if (l > 0.25) on = ((x + y) % 4 === 0) || ((x - y + dh) % 4 === 0); // cross
+        else               on = (x % 2 === 0) || (y % 2 === 0); // dense
+        out[y*dw+x] = invert ? (on ? 0 : 1) : (on ? 1 : 0);
+      }
+    }
+  }
+
+  // Render at dw×dh then scale up — much faster than full-res putImageData
+  const img = new ImageData(dw, dh);
+  const id  = img.data;
+  for (let i = 0; i < dw * dh; i++) {
+    const on = out[i];
+    const j  = i * 4;
+    const sr = sd[i*4], sg = sd[i*4+1], sb2 = sd[i*4+2];
+    if (colorMode === 'bw') {
+      const v = on ? 255 : 0; id[j]=v; id[j+1]=v; id[j+2]=v; id[j+3]=255;
+    } else if (colorMode === 'green') {
+      id[j]=0; id[j+1]=on?255:0; id[j+2]=on?65:0; id[j+3]=255;
+    } else if (colorMode === 'amber') {
+      id[j]=on?255:0; id[j+1]=on?170:0; id[j+2]=0; id[j+3]=255;
+    } else if (colorMode === 'source') {
+      id[j]=on?sr:0; id[j+1]=on?sg:0; id[j+2]=on?sb2:0; id[j+3]=255;
+    } else {
+      id[j]=on?(sr>128?255:128):0; id[j+1]=on?(sg>128?255:128):0; id[j+2]=on?(sb2>128?255:128):0; id[j+3]=255;
+    }
+  }
+  // Write to small canvas then scale up pixel-perfectly
+  const [dc, dctx] = getDitherCanvas(dw, dh);
+  dctx.putImageData(img, 0, 0);
+  outCtx.imageSmoothingEnabled = false;
+  outCtx.drawImage(dc, 0, 0, dw, dh, 0, 0, vw, vh);
+  outCtx.imageSmoothingEnabled = true;
+  if (opts.ditherGlow) {
+    outCtx.filter='blur(2px)'; outCtx.globalAlpha=0.3;
+    outCtx.drawImage(output,0,0);
+    outCtx.filter='none'; outCtx.globalAlpha=1.0;
+  }
+}
+
+function drawPaletteDither(vw, vh, scale, contrast) {
+  const palName  = document.getElementById('dither-palette').value;
+  const palette  = PALETTES[palName] || PALETTES.gameboy;
+  const dw = Math.floor(vw / scale);
+  const dh = Math.floor(vh / scale);
+  tmpCtx.drawImage(getActiveVideo(), 0, 0, dw, dh);
+  const src = tmpCtx.getImageData(0, 0, dw, dh);
+  const sd  = src.data;
+  // Floyd-Steinberg dither to palette
+  const rr = new Float32Array(dw*dh), gg = new Float32Array(dw*dh), bb2 = new Float32Array(dw*dh);
+  for (let i = 0; i < dw*dh; i++) {
+    rr[i] = Math.min(255, Math.max(0, (sd[i*4]   - 128) * contrast + 128));
+    gg[i] = Math.min(255, Math.max(0, (sd[i*4+1] - 128) * contrast + 128));
+    bb2[i]= Math.min(255, Math.max(0, (sd[i*4+2] - 128) * contrast + 128));
+  }
+  const result = new Uint8Array(dw*dh*3);
+  for (let y = 0; y < dh; y++) {
+    for (let x = 0; x < dw; x++) {
+      const i = y*dw+x;
+      const c = closestPaletteColor(rr[i], gg[i], bb2[i], palette);
+      result[i*3]=c[0]; result[i*3+1]=c[1]; result[i*3+2]=c[2];
+      const er = rr[i]-c[0], eg = gg[i]-c[1], eb = bb2[i]-c[2];
+      if (x+1<dw) { rr[i+1]+=er*7/16; gg[i+1]+=eg*7/16; bb2[i+1]+=eb*7/16; }
+      if (y+1<dh) {
+        if (x>0)   { rr[i+dw-1]+=er*3/16; gg[i+dw-1]+=eg*3/16; bb2[i+dw-1]+=eb*3/16; }
+                   { rr[i+dw]  +=er*5/16; gg[i+dw]  +=eg*5/16; bb2[i+dw]  +=eb*5/16; }
+        if (x+1<dw){ rr[i+dw+1]+=er*1/16; gg[i+dw+1]+=eg*1/16; bb2[i+dw+1]+=eb*1/16; }
+      }
+    }
+  }
+  const img = new ImageData(dw, dh);
+  const id  = img.data;
+  for (let i = 0; i < dw*dh; i++) {
+    const si = i*3;
+    const j  = i*4;
+    id[j]=result[si]; id[j+1]=result[si+1]; id[j+2]=result[si+2]; id[j+3]=255;
+  }
+  const [dc, dctx] = getDitherCanvas(dw, dh);
+  dctx.putImageData(img, 0, 0);
+  outCtx.imageSmoothingEnabled = false;
+  outCtx.drawImage(dc, 0, 0, dw, dh, 0, 0, vw, vh);
+  outCtx.imageSmoothingEnabled = true;
+}
+
+function drawDuotoneDither(vw, vh, scale, contrast, thresh) {
+  const shadow    = document.getElementById('dither-shadow').value;
+  const highlight = document.getElementById('dither-highlight').value;
+  const sr = parseInt(shadow.slice(1,3),16),    sg = parseInt(shadow.slice(3,5),16),    sb = parseInt(shadow.slice(5,7),16);
+  const hr = parseInt(highlight.slice(1,3),16), hg = parseInt(highlight.slice(3,5),16), hb = parseInt(highlight.slice(5,7),16);
+  const dw = Math.floor(vw / scale);
+  const dh = Math.floor(vh / scale);
+  tmpCtx.drawImage(getActiveVideo(), 0, 0, dw, dh);
+  const src = tmpCtx.getImageData(0, 0, dw, dh);
+  const sd  = src.data;
+  const luma = new Float32Array(dw*dh);
+  for (let i = 0; i < dw*dh; i++) {
+    let l = sd[i*4]*0.299 + sd[i*4+1]*0.587 + sd[i*4+2]*0.114;
+    luma[i] = Math.min(255, Math.max(0, (l-128)*contrast+128));
+  }
+  // Floyd-Steinberg with duotone output
+  const err = new Float32Array(luma);
+  const out = new Uint8Array(dw*dh);
+  for (let y = 0; y < dh; y++) {
+    for (let x = 0; x < dw; x++) {
+      const i = y*dw+x;
+      const old = err[i];
+      const nw  = old < thresh ? 0 : 255;
+      out[i] = nw > 127 ? 1 : 0;
+      const e = old - nw;
+      if (x+1<dw)       err[i+1]    += e*7/16;
+      if (y+1<dh) {
+        if (x>0)         err[i+dw-1] += e*3/16;
+                         err[i+dw]   += e*5/16;
+        if (x+1<dw)     err[i+dw+1] += e*1/16;
+      }
+    }
+  }
+  const img = new ImageData(dw, dh);
+  const id  = img.data;
+  for (let i = 0; i < dw*dh; i++) {
+    const on = out[i];
+    const j  = i*4;
+    id[j]=on?hr:sr; id[j+1]=on?hg:sg; id[j+2]=on?hb:sb; id[j+3]=255;
+  }
+  const [dc, dctx] = getDitherCanvas(dw, dh);
+  dctx.putImageData(img, 0, 0);
+  outCtx.imageSmoothingEnabled = false;
+  outCtx.drawImage(dc, 0, 0, dw, dh, 0, 0, vw, vh);
+  outCtx.imageSmoothingEnabled = true;
+}
+
+
+// ── Motion tracker ────────────────────────────────────────────
+let motBgData    = null;   // background model (Float32Array RGB)
+let motTrailCanvas = null, motTrailCtx = null;  // persistent trail buffer
+let motPrevW = 0, motPrevH = 0;
+
+function motResetBg() {
+  motBgData = null;
+  if (motTrailCtx) motTrailCtx.clearRect(0, 0, motTrailCanvas.width, motTrailCanvas.height);
+  setStatus('◌ background reset');
+}
+
+function drawMotion(vw, vh) {
+  const thresh   = parseInt(document.getElementById('mot-thresh').value);
+  const sens     = parseInt(document.getElementById('mot-sens').value);
+  const feather  = parseInt(document.getElementById('mot-feather').value);
+  const grade    = document.getElementById('mot-grade').value;
+  const effect   = document.getElementById('mot-effect').value;
+  const decay    = parseInt(document.getElementById('mot-decay').value) / 100;
+  const bgBlend  = parseInt(document.getElementById('mot-bgblend').value) / 100;
+  const showMap  = opts.motShowMap;
+  const flowArr  = opts.motFlowArrows;
+  const glow     = opts.motGlow;
+
+  // Work at half res for speed
+  const dw = Math.floor(vw / 2), dh = Math.floor(vh / 2);
+
+  // Ensure trail canvas matches output size
+  if (!motTrailCanvas || motPrevW !== vw || motPrevH !== vh) {
+    motTrailCanvas = document.createElement('canvas');
+    motTrailCanvas.width = vw; motTrailCanvas.height = vh;
+    motTrailCtx = motTrailCanvas.getContext('2d');
+    motBgData = null;
+    motPrevW = vw; motPrevH = vh;
+  }
+
+  // Sample current frame at half res
+  tmpCtx.drawImage(getActiveVideo(), 0, 0, dw, dh);
+  const cur = tmpCtx.getImageData(0, 0, dw, dh).data;
+
+  // Init background model on first frame
+  if (!motBgData) {
+    motBgData = new Float32Array(dw * dh * 3);
+    for (let i = 0, j = 0; i < cur.length; i += 4, j += 3) {
+      motBgData[j] = cur[i]; motBgData[j+1] = cur[i+1]; motBgData[j+2] = cur[i+2];
+    }
+    outCtx.fillStyle = '#000';
+    outCtx.fillRect(0, 0, vw, vh);
+    return;
+  }
+
+  // Compute motion mask at half res
+  const motMask = new Float32Array(dw * dh);
+  const learnRate = 0.05;
+
+  for (let i = 0, j = 0; i < cur.length; i += 4, j += 3) {
+    const dr = cur[i]   - motBgData[j];
+    const dg = cur[i+1] - motBgData[j+1];
+    const db = cur[i+2] - motBgData[j+2];
+    const diff = (Math.abs(dr) + Math.abs(dg) + Math.abs(db)) / 3 * sens;
+    motMask[j/3] = Math.min(1, Math.max(0, (diff - thresh) / (thresh + 1)));
+    // Update bg model for static areas only
+    if (diff < thresh * 0.5) {
+      motBgData[j]   += (cur[i]   - motBgData[j])   * learnRate;
+      motBgData[j+1] += (cur[i+1] - motBgData[j+1]) * learnRate;
+      motBgData[j+2] += (cur[i+2] - motBgData[j+2]) * learnRate;
+    }
+  }
+
+  // Apply feathering (box blur on mask)
+  if (feather > 0) {
+    const tmp2 = new Float32Array(motMask);
+    for (let y = 0; y < dh; y++) {
+      for (let x = 0; x < dw; x++) {
+        let sum = 0, cnt = 0;
+        for (let dy = -feather; dy <= feather; dy++) {
+          for (let dx2 = -feather; dx2 <= feather; dx2++) {
+            const nx = x+dx2, ny = y+dy;
+            if (nx>=0&&nx<dw&&ny>=0&&ny<dh) { sum+=tmp2[ny*dw+nx]; cnt++; }
+          }
+        }
+        motMask[y*dw+x] = sum/cnt;
+      }
+    }
+  }
+
+  // Show map mode — just draw the motion mask as greyscale
+  if (showMap) {
+    outCtx.fillStyle = '#000';
+    outCtx.fillRect(0, 0, vw, vh);
+    const img = new ImageData(dw, dh);
+    for (let i = 0; i < dw*dh; i++) {
+      const v = Math.round(motMask[i] * 255);
+      img.data[i*4]=v; img.data[i*4+1]=v; img.data[i*4+2]=v; img.data[i*4+3]=255;
+    }
+    const [dc, dctx] = getDitherCanvas(dw, dh);
+    dctx.putImageData(img, 0, 0);
+    outCtx.imageSmoothingEnabled = false;
+    outCtx.drawImage(dc, 0, 0, dw, dh, 0, 0, vw, vh);
+    outCtx.imageSmoothingEnabled = true;
+    return;
+  }
+
+  // Build motion-revealed output image at half res
+  const img = new ImageData(dw, dh);
+  for (let i = 0; i < dw*dh; i++) {
+    const a  = motMask[i];
+    const si = i * 4;
+    const r  = cur[si], g = cur[si+1], b = cur[si+2];
+    let or = r, og = g, ob = b;
+
+    // Apply grade
+    if (grade === 'green')  { const l=r*0.299+g*0.587+b*0.114; or=0; og=l*a; ob=l*a*0.25; }
+    else if (grade === 'amber') { const l=r*0.299+g*0.587+b*0.114; or=l*a; og=l*a*0.67; ob=0; }
+    else if (grade === 'bw')    { const l=r*0.299+g*0.587+b*0.114; or=og=ob=l; }
+    else if (grade === 'thermal') {
+      const l = (r*0.299+g*0.587+b*0.114)/255;
+      or = l < 0.5 ? l*2*128 : 128+l*127; og = l < 0.25 ? 0 : l < 0.75 ? (l-0.25)*2*255 : 255; ob = l > 0.5 ? 0 : (0.5-l)*510;
+    }
+    else if (grade === 'invert') { or=255-r; og=255-g; ob=255-b; }
+
+    img.data[si]  = or * a;
+    img.data[si+1]= og * a;
+    img.data[si+2]= ob * a;
+    img.data[si+3]= 255;
+  }
+
+  // Write to small canvas
+  const [mc, mctx] = getDitherCanvas(dw, dh);
+  mctx.putImageData(img, 0, 0);
+
+  // Apply trail decay — fade trail canvas then draw new motion on top
+  if (decay > 0) {
+    motTrailCtx.globalAlpha = decay;
+    motTrailCtx.fillStyle = '#000';
+    motTrailCtx.fillRect(0, 0, vw, vh);
+    motTrailCtx.globalAlpha = 1;
+  } else {
+    motTrailCtx.clearRect(0, 0, vw, vh);
+  }
+  motTrailCtx.imageSmoothingEnabled = false;
+  motTrailCtx.drawImage(mc, 0, 0, dw, dh, 0, 0, vw, vh);
+
+  // Compose to output
+  outCtx.fillStyle = '#000';
+  outCtx.fillRect(0, 0, vw, vh);
+
+  // Optional BG blend — ghost of original camera feed
+  if (bgBlend > 0) {
+    outCtx.globalAlpha = bgBlend;
+    outCtx.drawImage(getActiveVideo(), 0, 0, vw, vh);
+    outCtx.globalAlpha = 1;
+  }
+
+  if (glow) { outCtx.filter = 'blur(3px)'; outCtx.globalAlpha = 0.4; outCtx.drawImage(motTrailCanvas, 0, 0); outCtx.filter = 'none'; outCtx.globalAlpha = 1; }
+  outCtx.drawImage(motTrailCanvas, 0, 0);
+
+  // Flow arrows — sample motion grid and draw direction vectors
+  if (flowArr) {
+    const gridSize = 32;
+    outCtx.strokeStyle = grade === 'green' ? '#00ff41' : grade === 'amber' ? '#ffaa00' : '#ffffff';
+    outCtx.lineWidth = 1.5;
+    if (glow) { outCtx.shadowColor = outCtx.strokeStyle; outCtx.shadowBlur = 6; }
+
+    for (let gy = gridSize; gy < vh - gridSize; gy += gridSize) {
+      for (let gx = gridSize; gx < vw - gridSize; gx += gridSize) {
+        // Sample motion in small patch
+        const mx = Math.floor(gx / vw * dw);
+        const my = Math.floor(gy / vh * dh);
+        const patchR = 3;
+        let dx2 = 0, dy2 = 0, totalMot = 0;
+        for (let py = -patchR; py <= patchR; py++) {
+          for (let px2 = -patchR; px2 <= patchR; px2++) {
+            const ni = (Math.min(dh-1,Math.max(0,my+py))*dw + Math.min(dw-1,Math.max(0,mx+px2)));
+            const m = motMask[ni];
+            dx2 += px2 * m; dy2 += py * m; totalMot += m;
+          }
+        }
+        if (totalMot < 0.5) continue;
+        const norm = Math.sqrt(dx2*dx2 + dy2*dy2) || 1;
+        const len  = Math.min(gridSize * 0.8, totalMot * 20);
+        const ex   = gx + (dx2/norm) * len;
+        const ey   = gy + (dy2/norm) * len;
+        // Arrow line
+        outCtx.beginPath();
+        outCtx.moveTo(gx, gy);
+        outCtx.lineTo(ex, ey);
+        outCtx.stroke();
+        // Arrowhead
+        const angle = Math.atan2(ey - gy, ex - gx);
+        outCtx.beginPath();
+        outCtx.moveTo(ex, ey);
+        outCtx.lineTo(ex - 8*Math.cos(angle-0.4), ey - 8*Math.sin(angle-0.4));
+        outCtx.moveTo(ex, ey);
+        outCtx.lineTo(ex - 8*Math.cos(angle+0.4), ey - 8*Math.sin(angle+0.4));
+        outCtx.stroke();
+      }
+    }
+    outCtx.shadowBlur = 0;
+  }
+
+  setStatus(`◌ motion — ${Math.round(motMask.reduce((a,b)=>a+b,0)/motMask.length*100)}% active`);
+}
+
+
   // In file mode always do offline render regardless of sourceFileObj state
   if (videoSource === 'file') {
     if (sourceFileObj) startOfflineRender();
