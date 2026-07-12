@@ -158,7 +158,17 @@
   }
   #btn-settings.open { background:#001a0099; border-color:var(--green); }
 
-  /* permission screen */
+  /* PIN keypad */
+  .pn {
+    padding:16px; background:#0a0a0a; color:#00ff41;
+    border:1px solid #1a1a1a; font-family:'Courier New',monospace;
+    font-size:18px; border-radius:3px; cursor:pointer;
+    -webkit-tap-highlight-color:transparent; touch-action:manipulation;
+  }
+  .pn:active { background:#001a00; border-color:#00ff41; }
+  .pd { width:12px; height:12px; border-radius:50%; border:1px solid #333; }
+  .pd.filled { background:#00ff41; border-color:#00ff41; }
+  .pd.error  { background:#ff2266; border-color:#ff2266; }
   #perm-screen {
     position:absolute; inset:0; background:var(--bg);
     display:flex; flex-direction:column; align-items:center; justify-content:center;
@@ -201,10 +211,10 @@
   <div style="color:#00ff41;font-size:13px;letter-spacing:3px;">⌛ TEMPORAL PRINTER</div>
   <div style="color:#444;font-size:9px;letter-spacing:2px;">PHOSFEIN DESIGN</div>
   <div id="pin-dots" style="display:flex;gap:12px;margin:8px 0;">
-    <div class="pd" style="width:12px;height:12px;border-radius:50%;border:1px solid #333;"></div>
-    <div class="pd" style="width:12px;height:12px;border-radius:50%;border:1px solid #333;"></div>
-    <div class="pd" style="width:12px;height:12px;border-radius:50%;border:1px solid #333;"></div>
-    <div class="pd" style="width:12px;height:12px;border-radius:50%;border:1px solid #333;"></div>
+    <div class="pd"></div>
+    <div class="pd"></div>
+    <div class="pd"></div>
+    <div class="pd"></div>
   </div>
   <div id="pin-err" style="color:#ff2266;font-size:9px;letter-spacing:2px;height:14px;"></div>
   <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;width:220px;">
@@ -221,18 +231,7 @@
     <button class="pn" onclick="pinTap('0')">0</button>
     <button class="pn" onclick="pinBack()" style="color:#666;font-size:14px;">⌫</button>
   </div>
-  <style>
-    .pn {
-      padding:16px; background:#0a0a0a; color:#00ff41;
-      border:1px solid #1a1a1a; font-family:'Courier New',monospace;
-      font-size:18px; border-radius:3px; cursor:pointer;
-      -webkit-tap-highlight-color:transparent;
-    }
-    .pn:active { background:#001a00; border-color:#00ff41; }
-    .pd.filled { background:#00ff41; border-color:#00ff41; }
-    .pd.error  { background:#ff2266; border-color:#ff2266; }
-  </style>
-</div>
+  </div><!-- /pin-screen -->
 
 <div id="perm-screen">
   <h2>⌛ TEMPORAL PRINTER</h2>
