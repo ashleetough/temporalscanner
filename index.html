@@ -2213,6 +2213,7 @@ function drawBlob(vw, vh) {
 
 // ── ASCII renderer ────────────────────────────────────────────
 let ditherSmallCanvas = null, ditherSmallCtx = null;
+let ditherSampleCanvas = null, ditherSampleCtx = null;
 
 function getDitherCanvas(w, h) {
   if (!ditherSmallCanvas || ditherSmallCanvas.width !== w || ditherSmallCanvas.height !== h) {
@@ -2221,6 +2222,15 @@ function getDitherCanvas(w, h) {
     ditherSmallCtx = ditherSmallCanvas.getContext('2d');
   }
   return [ditherSmallCanvas, ditherSmallCtx];
+}
+
+function getDitherSampleCanvas(w, h) {
+  if (!ditherSampleCanvas || ditherSampleCanvas.width !== w || ditherSampleCanvas.height !== h) {
+    ditherSampleCanvas = document.createElement('canvas');
+    ditherSampleCanvas.width = w; ditherSampleCanvas.height = h;
+    ditherSampleCtx = ditherSampleCanvas.getContext('2d');
+  }
+  return [ditherSampleCanvas, ditherSampleCtx];
 }
 
 // Persistent offscreen canvas for ASCII rendering
@@ -2363,15 +2373,26 @@ function drawDither(vw, vh) {
   const contrast = parseInt(document.getElementById('dither-contrast').value) / 100;
   const invert   = opts.ditherInvert;
 
+  // Cap working resolution to avoid freezes — max 480p equivalent
+  const MAX_PIX = 480 * 270;
+  let dw = Math.floor(vw / scale);
+  let dh = Math.floor(vh / scale);
+  const pixels = dw * dh;
+  if (pixels > MAX_PIX) {
+    const s = Math.sqrt(MAX_PIX / pixels);
+    dw = Math.floor(dw * s);
+    dh = Math.floor(dh * s);
+  }
+
   // Palette and duotone modes bypass normal b/w pipeline
-  if (style === 'palette') { drawPaletteDither(vw, vh, scale, contrast); return; }
-  if (style === 'duotone') { drawDuotoneDither(vw, vh, scale, contrast, thresh); return; }
+  if (style === 'palette') { drawPaletteDither(vw, vh, dw, dh, contrast); return; }
+  if (style === 'duotone') { drawDuotoneDither(vw, vh, dw, dh, contrast, thresh); return; }
   if (style === 'animated') { ditherNoiseT += 0.5; }
 
-  const dw = Math.floor(vw / scale);
-  const dh = Math.floor(vh / scale);
-  tmpCtx.drawImage(getActiveVideo(), 0, 0, dw, dh);
-  const src = tmpCtx.getImageData(0, 0, dw, dh);
+  // Use dedicated small canvas for sampling — avoids tmpCanvas size mismatch
+  const [sc, sctx] = getDitherSampleCanvas(dw, dh);
+  sctx.drawImage(getActiveVideo(), 0, 0, dw, dh);
+  const src = sctx.getImageData(0, 0, dw, dh);
   const sd  = src.data;
 
   const luma = new Float32Array(dw * dh);
@@ -2487,13 +2508,12 @@ function drawDither(vw, vh) {
   }
 }
 
-function drawPaletteDither(vw, vh, scale, contrast) {
+function drawPaletteDither(vw, vh, dw, dh, contrast) {
   const palName  = document.getElementById('dither-palette').value;
   const palette  = PALETTES[palName] || PALETTES.gameboy;
-  const dw = Math.floor(vw / scale);
-  const dh = Math.floor(vh / scale);
-  tmpCtx.drawImage(getActiveVideo(), 0, 0, dw, dh);
-  const src = tmpCtx.getImageData(0, 0, dw, dh);
+  const [sc, sctx] = getDitherSampleCanvas(dw, dh);
+  sctx.drawImage(getActiveVideo(), 0, 0, dw, dh);
+  const src = sctx.getImageData(0, 0, dw, dh);
   const sd  = src.data;
   // Floyd-Steinberg dither to palette
   const rr = new Float32Array(dw*dh), gg = new Float32Array(dw*dh), bb2 = new Float32Array(dw*dh);
@@ -2531,15 +2551,14 @@ function drawPaletteDither(vw, vh, scale, contrast) {
   outCtx.imageSmoothingEnabled = true;
 }
 
-function drawDuotoneDither(vw, vh, scale, contrast, thresh) {
+function drawDuotoneDither(vw, vh, dw, dh, contrast, thresh) {
   const shadow    = document.getElementById('dither-shadow').value;
   const highlight = document.getElementById('dither-highlight').value;
   const sr = parseInt(shadow.slice(1,3),16),    sg = parseInt(shadow.slice(3,5),16),    sb = parseInt(shadow.slice(5,7),16);
   const hr = parseInt(highlight.slice(1,3),16), hg = parseInt(highlight.slice(3,5),16), hb = parseInt(highlight.slice(5,7),16);
-  const dw = Math.floor(vw / scale);
-  const dh = Math.floor(vh / scale);
-  tmpCtx.drawImage(getActiveVideo(), 0, 0, dw, dh);
-  const src = tmpCtx.getImageData(0, 0, dw, dh);
+  const [sc2, sctx2] = getDitherSampleCanvas(dw, dh);
+  sctx2.drawImage(getActiveVideo(), 0, 0, dw, dh);
+  const src = sctx2.getImageData(0, 0, dw, dh);
   const sd  = src.data;
   const luma = new Float32Array(dw*dh);
   for (let i = 0; i < dw*dh; i++) {
