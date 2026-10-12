@@ -1018,8 +1018,13 @@ function startStreamFromConstraints(c) {
     video.setAttribute('muted','');
 
     function onReady() {
-      const vw = video.videoWidth  || 640;
-      const vh = video.videoHeight || 480;
+      const rawW = video.videoWidth  || 640;
+      const rawH = video.videoHeight || 480;
+      // Cap preview canvas to 720p to keep rendering smooth on mobile
+      const MAX_W = 1280, MAX_H = 720;
+      const scale = Math.min(1, MAX_W / rawW, MAX_H / rawH);
+      const vw = Math.round(rawW * scale);
+      const vh = Math.round(rawH * scale);
       output.width  = vw;
       output.height = vh;
 
@@ -1459,7 +1464,7 @@ function loadVideoFile(input) {
 
 // ── Active video source helper ────────────────────────────────
 function getActiveVideo() {
-  if (videoSource === 'file' && fileVideo && fileVideo.readyState >= 2) return fileVideo;
+  if (videoSource === 'file' && fileVideo) return fileVideo;
   return document.getElementById('video');
 }
 
@@ -1475,7 +1480,7 @@ function resetCtx() {
   outCtx.lineWidth = 1;
 }
 
-// ── Main loop (throttled to 24fps) ────────────────────────────
+// ── Main loop ─────────────────────────────────────────────────
 function loop(ts) {
   animId = requestAnimationFrame(loop);
 
@@ -1635,6 +1640,9 @@ function computeFocusMask(vw, vh) {
 }
 
 // ── Line renderer ─────────────────────────────────────────────
+// Persistent half-res sample canvas — avoids re-creating every frame
+let lineSampleCanvas = null, lineSampleCtx = null;
+
 function drawLineRender(vw, vh) {
   outCtx.globalAlpha = 1; outCtx.globalCompositeOperation = 'source-over'; outCtx.filter = 'none';
   outCtx.shadowBlur = 0;
@@ -1653,9 +1661,20 @@ function drawLineRender(vw, vh) {
   const segFeather  = parseInt(document.getElementById('seg-feather').value) / 30;
   const segThresh   = parseInt(document.getElementById('seg-thresh').value) / 100;
 
-  // Draw video to tmpCanvas
-  tmpCtx.drawImage(getActiveVideo(), 0, 0, vw, vh);
-  const imgData = tmpCtx.getImageData(0, 0, vw, vh).data;
+  // Sample at half resolution — 4x fewer pixels to read from GPU, negligible quality loss
+  const sw = Math.floor(vw / 2), sh = Math.floor(vh / 2);
+  if (!lineSampleCanvas || lineSampleCanvas.width !== sw || lineSampleCanvas.height !== sh) {
+    lineSampleCanvas = document.createElement('canvas');
+    lineSampleCanvas.width = sw; lineSampleCanvas.height = sh;
+    lineSampleCtx = lineSampleCanvas.getContext('2d');
+  }
+  lineSampleCtx.drawImage(getActiveVideo(), 0, 0, sw, sh);
+  const imgData = lineSampleCtx.getImageData(0, 0, sw, sh).data;
+
+  // Helper — maps full-res coords to half-res sample buffer
+  function sampleIdx(x, y) {
+    return (Math.min(sh-1, Math.floor(y/2)) * sw + Math.min(sw-1, Math.floor(x/2))) * 4;
+  }
 
   const segMethod   = document.getElementById('seg-method').value;
   const lumaKeyMode = document.getElementById('luma-key-mode').value;
@@ -1698,7 +1717,8 @@ function drawLineRender(vw, vh) {
     } else if (segMethod === 'luma') {
       const out = outCtx.createImageData(vw, vh);
       for (let j = 0; j < vw*vh; j++) {
-        const v = getLumaVal(j * 4) / 255;
+        const x = j % vw, y = Math.floor(j / vw);
+        const v = getLumaVal(x, y) / 255;
         let masked = segInvert ? 1 - v : v;
         const g = Math.round(Math.max(0, Math.min(1, (masked - segThresh + segFeather) / (segFeather*2 + 0.001))) * 255);
         out.data[j*4]=g; out.data[j*4+1]=g; out.data[j*4+2]=g; out.data[j*4+3]=255;
@@ -1709,7 +1729,8 @@ function drawLineRender(vw, vh) {
   }
 
   // ── Per-pixel channel sampler for luma mode ──────────────────
-  function getLumaVal(i) {
+  function getLumaVal(x, y) {
+    const i = sampleIdx(x, y);
     if (lumaKeyMode === 'r') return imgData[i];
     if (lumaKeyMode === 'g') return imgData[i+1];
     if (lumaKeyMode === 'b') return imgData[i+2];
@@ -1721,8 +1742,7 @@ function drawLineRender(vw, vh) {
     if (!segCut) return 1;
     let v;
     if (segMethod === 'luma') {
-      const i = (Math.floor(y)*vw + Math.floor(x)) * 4;
-      v = getLumaVal(i) / 255;
+      v = getLumaVal(x, y) / 255;
     } else if (segMethod === 'focus') {
       if (!focusMap) return 1;
       v = focusMap[Math.floor(y)*vw + Math.floor(x)];
@@ -1742,12 +1762,12 @@ function drawLineRender(vw, vh) {
   }
 
   function getBrightness(x, y) {
-    const i = (Math.floor(y)*vw + Math.floor(x))*4;
+    const i = sampleIdx(x, y);
     return (imgData[i]*0.299 + imgData[i+1]*0.587 + imgData[i+2]*0.114) / 255;
   }
-  function getPixelColor(x, y) {
-    const i = (Math.floor(y)*vw + Math.floor(x))*4;
-    return `rgb(${imgData[i]},${imgData[i+1]},${imgData[i+2]})`;
+  function getPixelRGB(x, y) {
+    const i = sampleIdx(x, y);
+    return [imgData[i], imgData[i+1], imgData[i+2]];
   }
 
   const pulse     = opts.linePulse;
@@ -1760,27 +1780,42 @@ function drawLineRender(vw, vh) {
   const lr = parseInt(lineHex.slice(1,3),16);
   const lg = parseInt(lineHex.slice(3,5),16);
   const lb = parseInt(lineHex.slice(5,7),16);
+  const bgr = parseInt(bgHex.slice(1,3),16);
+  const bgg = parseInt(bgHex.slice(3,5),16);
+  const bgb = parseInt(bgHex.slice(5,7),16);
 
-  outCtx.fillStyle = bgHex;
-  outCtx.fillRect(0,0,vw,vh);
+  // Write into pixel buffer — one putImageData at the end instead of N*M fillRect calls
+  const buf = new Uint8ClampedArray(vw * vh * 4);
+  // Fill background colour
+  for (let i = 0; i < vw * vh; i++) {
+    buf[i*4]=bgr; buf[i*4+1]=bgg; buf[i*4+2]=bgb; buf[i*4+3]=255;
+  }
+
+  function paintPixel(x, y, r, g, b, a) {
+    if (x < 0 || x >= vw || y < 0 || y >= vh) return;
+    const i = (Math.round(y)*vw + Math.round(x)) * 4;
+    const ia = a * 255;
+    if (a >= 1) { buf[i]=r; buf[i+1]=g; buf[i+2]=b; buf[i+3]=255; }
+    else { buf[i]=Math.round(buf[i]*(1-a)+r*a); buf[i+1]=Math.round(buf[i+1]*(1-a)+g*a); buf[i+2]=Math.round(buf[i+2]*(1-a)+b*a); buf[i+3]=255; }
+  }
 
   if (axis === 'horizontal') {
     for (let srcY = 0; srcY < vh; srcY += spacing) {
       for (let x = 0; x < vw; x++) {
         const da = segAlpha(x, srcY);
         if (da <= 0) continue;
-        let b = getBrightness(wave ? Math.min(vw-1,Math.max(0,Math.round(x+10*Math.sin(x/vw*Math.PI*4+lineT)))) : x, srcY);
+        const sampleX = wave ? Math.min(vw-1,Math.max(0,Math.round(x+10*Math.sin(x/vw*Math.PI*4+lineT)))) : x;
+        let b = getBrightness(sampleX, srcY);
         if (invert) b = 1-b;
         if (b < thresh) continue;
         const dy = Math.round(b*dispMod - dispMod/2);
         const destY = srcY - dy - scrollOff;
-        let color;
-        if      (colorMode==='source')   color = getPixelColor(x, srcY);
-        else if (colorMode==='gradient') { const t=x/vw; color=`rgba(${Math.round(lr*(1-t)+255*t)},${Math.round(lg*(1-t))},${Math.round(lb*(1-t)+255*t)},${da})`; }
-        else if (colorMode==='depth')    { color=`rgba(${Math.round(lr*b)},${Math.round(lg*b+100*(1-b))},${Math.round(lb*b+255*(1-b))},${da})`; }
-        else                             { const sc=0.3+b*0.7; color=`rgba(${Math.round(lr*sc)},${Math.round(lg*sc)},${Math.round(lb*sc)},${da})`; }
-        outCtx.fillStyle = color;
-        for (let t2=0; t2<thick; t2++) { const py=Math.round(destY+t2); if(py>=0&&py<vh) outCtx.fillRect(x,py,1,1); }
+        let r, g, bv;
+        if (colorMode==='source') { const rgb=getPixelRGB(x,srcY); r=rgb[0]; g=rgb[1]; bv=rgb[2]; }
+        else if (colorMode==='gradient') { const t=x/vw; r=Math.round(lr*(1-t)+255*t); g=Math.round(lg*(1-t)); bv=Math.round(lb*(1-t)+255*t); }
+        else if (colorMode==='depth') { r=Math.round(lr*b); g=Math.round(lg*b+100*(1-b)); bv=Math.round(lb*b+255*(1-b)); }
+        else { const sc=0.3+b*0.7; r=Math.round(lr*sc); g=Math.round(lg*sc); bv=Math.round(lb*sc); }
+        for (let t2=0; t2<thick; t2++) paintPixel(x, destY+t2, r, g, bv, da);
       }
     }
   } else {
@@ -1793,14 +1828,15 @@ function drawLineRender(vw, vh) {
         if (b < thresh) continue;
         const dx = Math.round(b*dispMod - dispMod/2);
         const destX = srcX - dx - scrollOff;
-        const sc = 0.3+b*0.7;
-        outCtx.fillStyle = colorMode==='source'
-          ? getPixelColor(srcX,y)
-          : `rgba(${Math.round(lr*sc)},${Math.round(lg*sc)},${Math.round(lb*sc)},${da})`;
-        for (let t2=0; t2<thick; t2++) { const px=Math.round(destX+t2); if(px>=0&&px<vw) outCtx.fillRect(px,y,1,1); }
+        let r, g, bv;
+        if (colorMode==='source') { const rgb=getPixelRGB(srcX,y); r=rgb[0]; g=rgb[1]; bv=rgb[2]; }
+        else { const sc=0.3+b*0.7; r=Math.round(lr*sc); g=Math.round(lg*sc); bv=Math.round(lb*sc); }
+        for (let t2=0; t2<thick; t2++) paintPixel(destX+t2, y, r, g, bv, da);
       }
     }
   }
+
+  outCtx.putImageData(new ImageData(buf, vw, vh), 0, 0);
 
   if (opts.lineGlow) {
     outCtx.filter='blur(3px)'; outCtx.globalAlpha=0.3;
