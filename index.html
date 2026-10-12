@@ -928,9 +928,9 @@ let video, output, outCtx;
 let scanCanvas, scanCtx;
 let lineT = 0;
 
-// Performance throttle — render at 24fps max on mobile
+// Frame timing
 let lastFrameTime = 0;
-const TARGET_INTERVAL = 1000 / 24;
+let lastHeavyTime = 0;
 let fpsLastTime = 0, fpsFrames = 0;
 
 // Offscreen canvas reused each frame instead of creating new ones
@@ -1483,8 +1483,6 @@ function loop(ts) {
   if (!activeVid || activeVid.readyState < 2) return;
   if (!output.width || !output.height) return;
 
-  // throttle — skip during recording so captureStream gets every frame
-  if (!isRecording && !isRendering && ts - lastFrameTime < TARGET_INTERVAL) return;
   lastFrameTime = ts;
 
   // fps counter
@@ -1503,10 +1501,16 @@ function loop(ts) {
     if (segSendCounter % 1 === 0) sendToSegmentor();
   }
 
-  if      (mode === 'scan')  { resetCtx(); drawScan(vw, vh); }
-  else if (mode === 'line')  { resetCtx(); drawLineRender(vw, vh); }
-  else if (mode === 'blob')  { resetCtx(); drawBlob(vw, vh); }
-  else if (mode === 'ascii') { resetCtx(); drawAscii(vw, vh); }
+  // Heavy modes throttled to 20fps to avoid stalls; lightweight modes run at full rAF speed
+  const HEAVY_INTERVAL = 1000 / 20;
+  const isHeavy = (mode === 'dither' || mode === 'blob' || mode === 'motion');
+  if (isHeavy && !isRecording && !isRendering && ts - lastHeavyTime < HEAVY_INTERVAL) return;
+  if (isHeavy) lastHeavyTime = ts;
+
+  if      (mode === 'scan')   { resetCtx(); drawScan(vw, vh); }
+  else if (mode === 'line')   { resetCtx(); drawLineRender(vw, vh); }
+  else if (mode === 'blob')   { resetCtx(); drawBlob(vw, vh); }
+  else if (mode === 'ascii')  { resetCtx(); drawAscii(vw, vh); }
   else if (mode === 'dither') { resetCtx(); drawDither(vw, vh); }
   else if (mode === 'motion') { drawMotion(vw, vh); }
 
