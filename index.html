@@ -808,7 +808,7 @@
         </div>
         <div class="ctrl-row">
           <label>Size</label>
-          <input type="range" class="blob-ctrl" id="blob-label-size" min="8" max="48" value="14"
+          <input type="range" class="blob-ctrl" id="blob-label-size" min="8" max="120" value="14"
             oninput="this.nextElementSibling.textContent=this.value">
           <span class="val blob-val">14</span>
         </div>
@@ -1439,7 +1439,13 @@ function loadVideoFile(input) {
   fileVideo=document.getElementById('file-video');
   fileVideo.src=url; fileVideo.loop=true; fileVideo.muted=true;
   fileVideo.onloadedmetadata=function(){
-    const vw=fileVideo.videoWidth||640, vh=fileVideo.videoHeight||480;
+    const rawW=fileVideo.videoWidth||640, rawH=fileVideo.videoHeight||480;
+    // Preview at screen-friendly size for live loop
+    const MAX_W=1280, MAX_H=720;
+    const scale=Math.min(1, MAX_W/rawW, MAX_H/rawH);
+    const vw=Math.round(rawW*scale), vh=Math.round(rawH*scale);
+    // Store full source res for offline render
+    fileVideo._srcW = rawW; fileVideo._srcH = rawH;
     output.width=vw; output.height=vh;
     tmpCanvas.width=vw; tmpCanvas.height=vh;
     maskCanvas.width=vw; maskCanvas.height=vh;
@@ -2153,7 +2159,7 @@ function drawBlob(vw, vh) {
     if (opts.blobLabel) {
       const labelFormat = document.getElementById('blob-label-format').value;
       const labelStyle  = document.getElementById('blob-label-style').value;
-      const labelSize   = parseInt(document.getElementById('blob-label-size').value);
+      const labelSize = parseInt(document.getElementById('blob-label-size').value);
       const labelFont   = document.getElementById('blob-label-font').value;
       const customText  = document.getElementById('blob-custom-text').value || 'TARGET';
 
@@ -2885,23 +2891,50 @@ function startOfflineRender() {
   recordedChunks = []; recordedBlob = null;
   document.getElementById('btn-save').style.display = 'none';
 
-  // Rewind and play from start
-  fileVideo.loop = false;
-  fileVideo.currentTime = 0;
-  fileVideo.play().catch(e => console.warn('render play:', e));
-
   const btn = document.getElementById('btn-record');
   const mimeType = getBestMimeType();
   const options  = mimeType ? {mimeType} : {};
   const ext      = (mimeType && mimeType.startsWith('video/mp4')) ? 'mp4' : 'webm';
 
-  // Capture the output canvas — same as camera recording
+  // Full source resolution for render — no cap
+  const rw = fileVideo._srcW || fileVideo.videoWidth || output.width;
+  const rh = fileVideo._srcH || fileVideo.videoHeight || output.height;
+
+  // Offscreen render canvas at full source resolution
+  const renderCanvas = document.createElement('canvas');
+  renderCanvas.width = rw; renderCanvas.height = rh;
+  const renderCtx = renderCanvas.getContext('2d');
+
+  // Swap output to full-res for render duration
+  const prevW = output.width, prevH = output.height;
+  output.width = rw; output.height = rh;
+  outCtx = output.getContext('2d');
+
+  function stopRender() {
+    fileVideo.onended = null;
+    fileVideo.loop = true;
+    if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+    // Restore preview resolution
+    output.width = prevW; output.height = prevH;
+    outCtx = output.getContext('2d');
+  }
+
+  // Rewind and play from start
+  fileVideo.loop = false;
+  fileVideo.currentTime = 0;
+  fileVideo.play().catch(e => console.warn('render play:', e));
+
+  // Capture full-res output canvas
   const canvasStream = output.captureStream(30);
   try {
     mediaRecorder = new MediaRecorder(canvasStream, options);
   } catch(e) {
     try { mediaRecorder = new MediaRecorder(canvasStream); } catch(e2) {
-      setStatus('⚠ Recording not supported'); isRendering = false; return;
+      setStatus('⚠ Recording not supported');
+      isRendering = false;
+      output.width = prevW; output.height = prevH;
+      outCtx = output.getContext('2d');
+      return;
     }
   }
 
@@ -2910,31 +2943,22 @@ function startOfflineRender() {
     recordedBlob = new Blob(recordedChunks, { type: mimeType || 'video/mp4' });
     recordedBlob._ext = ext;
     isRendering = false;
-    fileVideo.loop = true;
     btn.textContent = '⚙ RENDER';
     btn.style.background = '#1a000099';
     btn.onclick = onRecordBtn;
     document.getElementById('btn-save').style.display = 'block';
     document.getElementById('rec-dot').style.display = 'none';
-    setStatus(`✓ Done — ${ext.toUpperCase()}`);
+    setStatus(`✓ Done — ${rw}×${rh} ${ext.toUpperCase()}`);
   };
 
-  // Auto-stop when video ends
-  fileVideo.onended = function() {
-    if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
-  };
+  fileVideo.onended = function() { stopRender(); };
 
   mediaRecorder.start(100);
-  isRendering = true;
   btn.textContent = '⏹ STOP';
   btn.style.background = '#330000';
-  btn.onclick = function() {
-    fileVideo.onended = null;
-    fileVideo.loop = true;
-    if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
-  };
+  btn.onclick = function() { stopRender(); };
   document.getElementById('rec-dot').style.display = 'block';
-  setStatus('⚙ Recording — auto-stops at end of video');
+  setStatus(`⚙ Rendering ${rw}×${rh} — auto-stops at end`);
 }
 
 function getBestMimeType() {
