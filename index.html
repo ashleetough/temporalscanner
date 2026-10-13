@@ -246,7 +246,9 @@
   <div id="canvas-wrap">
     <canvas id="output"></canvas>
     <video  id="video"      playsinline autoplay muted></video>
-    <video  id="file-video" playsinline autoplay muted loop style="display:none"></video>
+    <!-- Not display:none — iOS Safari deprioritises decoding for hidden videos and
+         requestVideoFrameCallback may not fire. Kept rendered but invisible. -->
+    <video  id="file-video" playsinline autoplay muted loop style="position:fixed;left:0;top:0;width:2px;height:2px;opacity:0.01;pointer-events:none;z-index:-1"></video>
     <div    id="scan-cursor"></div>
 
     <!-- Tab bar floats top -->
@@ -958,6 +960,8 @@ let opts = {
 // Source — 'camera' or 'file'
 let videoSource   = 'camera';
 let fileVideo     = null;
+let fileVideoRVFC = false;  // true when rVFC is driving file mode rendering
+let frameExactRendering = false;  // true while the WebCodecs frame-by-frame render runs
 let sourceFileObj = null;   // original File object for offline render
 let renderCanvas  = null;   // full-res canvas used during offline render
 let isRendering   = false;
@@ -1034,7 +1038,7 @@ function startStreamFromConstraints(c) {
 
       maskCanvas = document.createElement('canvas');
       maskCanvas.width = vw; maskCanvas.height = vh;
-      maskCtx = maskCanvas.getContext('2d');
+      maskCtx = maskCanvas.getContext('2d', { willReadFrequently: true });
 
       scanCanvas = document.createElement('canvas');
       scanCanvas.width = vw; scanCanvas.height = vh;
@@ -1044,7 +1048,7 @@ function startStreamFromConstraints(c) {
 
       bgCanvas = document.createElement('canvas');
       bgCanvas.width = DETECT_W; bgCanvas.height = DETECT_H;
-      bgCtx = bgCanvas.getContext('2d');
+      bgCtx = bgCanvas.getContext('2d', { willReadFrequently: true });
       drawBlob._bgData = null;
 
       resetScan();
@@ -1108,7 +1112,7 @@ function startFromFile() {
 
   maskCanvas = document.createElement('canvas');
   maskCanvas.width = 1280; maskCanvas.height = 720;
-  maskCtx = maskCanvas.getContext('2d');
+  maskCtx = maskCanvas.getContext('2d', { willReadFrequently: true });
 
   scanCanvas = document.createElement('canvas');
   scanCanvas.width = 1280; scanCanvas.height = 720;
@@ -1117,7 +1121,7 @@ function startFromFile() {
 
   bgCanvas = document.createElement('canvas');
   bgCanvas.width = DETECT_W; bgCanvas.height = DETECT_H;
-  bgCtx = bgCanvas.getContext('2d');
+  bgCtx = bgCanvas.getContext('2d', { willReadFrequently: true });
   drawBlob._bgData = null;
 
   document.getElementById('perm-screen').style.display = 'none';
@@ -1166,7 +1170,7 @@ function onCanvasTap(e) {
   const methodEl = document.getElementById('seg-method');
   if (methodEl && methodEl.value === 'touch') {
     e.preventDefault();
-    maskCtx.drawImage(getActiveVideo(), 0, 0, vw, vh);
+    maskCtx.drawImage(curFrame(), 0, 0, vw, vh);
     const px = maskCtx.getImageData(Math.max(0,Math.min(vw-1,cx)), Math.max(0,Math.min(vh-1,cy)), 1, 1).data;
     touchSeed = { r: px[0], g: px[1], b: px[2] };
     touchMaskPrev = null;
@@ -1374,7 +1378,7 @@ function onSegResults(results) {
   if (!segSmallCanvas) {
     segSmallCanvas = document.createElement('canvas');
     segSmallCanvas.width = SEG_W; segSmallCanvas.height = SEG_H;
-    segSmallCtx = segSmallCanvas.getContext('2d');
+    segSmallCtx = segSmallCanvas.getContext('2d', { willReadFrequently: true });
   }
   segSmallCtx.drawImage(results.segmentationMask, 0, 0, SEG_W, SEG_H);
   const px  = segSmallCtx.getImageData(0, 0, SEG_W, SEG_H).data;
@@ -1407,9 +1411,9 @@ function sendToSegmentor() {
   if (!segSmallCanvas) {
     segSmallCanvas = document.createElement('canvas');
     segSmallCanvas.width = SEG_W; segSmallCanvas.height = SEG_H;
-    segSmallCtx = segSmallCanvas.getContext('2d');
+    segSmallCtx = segSmallCanvas.getContext('2d', { willReadFrequently: true });
   }
-  segSmallCtx.drawImage(av, 0, 0, SEG_W, SEG_H);
+  segSmallCtx.drawImage(curFrame(), 0, 0, SEG_W, SEG_H);
   segRunning = true;
   segmentor.send({ image: segSmallCanvas }).catch(() => { segRunning = false; });
 }
@@ -1421,6 +1425,7 @@ function toggleSource() {
 
 function switchToCamera() {
   videoSource='camera';
+  fileVideoRVFC = false;
   if(fileVideo){fileVideo.pause();fileVideo.src='';}
   const btn=document.getElementById('btn-source');
   btn.textContent='📁 FILE'; btn.classList.remove('file-active');
@@ -1438,6 +1443,8 @@ function loadVideoFile(input) {
   const url=URL.createObjectURL(file);
   fileVideo=document.getElementById('file-video');
   fileVideo.src=url; fileVideo.loop=true; fileVideo.muted=true;
+  fileVideoRVFC = false;  // reset; will be set again if rVFC is available
+  fileVideo._minFrameDelta = 0; fileVideo._lastMediaTime = undefined;
   fileVideo.onloadedmetadata=function(){
     const rawW=fileVideo.videoWidth||640, rawH=fileVideo.videoHeight||480;
     // Preview at screen-friendly size for live loop
@@ -1457,6 +1464,26 @@ function loadVideoFile(input) {
     videoSource='file';
     if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}
     fileVideo.play().catch(e=>console.warn('file video play:',e));
+    // Use requestVideoFrameCallback for frame-accurate file rendering when available
+    if ('requestVideoFrameCallback' in HTMLVideoElement.prototype) {
+      fileVideoRVFC = true;
+      const thisVid = fileVideo;
+      function rVFCLoop(now, meta) {
+        if (videoSource !== 'file' || fileVideo !== thisVid) return;
+        // Learn source frame rate from decoded-frame timestamps (used by render)
+        if (meta && typeof meta.mediaTime === 'number') {
+          if (thisVid._lastMediaTime !== undefined) {
+            const d = meta.mediaTime - thisVid._lastMediaTime;
+            if (d > 0.004 && d < 0.2 && (!thisVid._minFrameDelta || d < thisVid._minFrameDelta)) thisVid._minFrameDelta = d;
+          }
+          thisVid._lastMediaTime = meta.mediaTime;
+        }
+        // Frame-exact render drives its own draws — don't double-advance effects
+        if (!frameExactRendering) renderFrame(now);
+        thisVid.requestVideoFrameCallback(rVFCLoop);
+      }
+      fileVideo.requestVideoFrameCallback(rVFCLoop);
+    }
     if(!animId) loop();
     const btn=document.getElementById('btn-source');
     btn.textContent='📷 CAM'; btn.classList.add('file-active');
@@ -1474,6 +1501,40 @@ function getActiveVideo() {
   return document.getElementById('video');
 }
 
+// ── Single per-frame grab ─────────────────────────────────────
+// Pulling pixels out of a <video> is the most expensive draw on mobile
+// (YUV→RGB conversion + full-source scale, every call). Grab it ONCE per
+// tick into frameCanvas at working resolution; every effect reads from it.
+// Preview: working res = 720p canvas. Render: working res = full source res.
+let frameCanvas = null, frameCtx = null, frameReady = false;
+function grabFrame(vw, vh) {
+  if (!frameCanvas) {
+    frameCanvas = document.createElement('canvas');
+    frameCtx = frameCanvas.getContext('2d', { alpha: false });
+  }
+  if (frameCanvas.width !== vw || frameCanvas.height !== vh) {
+    frameCanvas.width = vw; frameCanvas.height = vh;
+  }
+  frameCtx.drawImage(getActiveVideo(), 0, 0, vw, vh);
+  frameReady = true;
+}
+function curFrame() {
+  return frameReady ? frameCanvas : getActiveVideo();
+}
+
+// Small CPU-side canvases for effects that read pixels back (getImageData).
+// Kept separate from tmpCanvas so the big canvases stay on the GPU.
+const _sampleCanvases = {};
+function getSampleCtx(key, w, h) {
+  let s = _sampleCanvases[key];
+  if (!s || s.c.width !== w || s.c.height !== h) {
+    const c = document.createElement('canvas');
+    c.width = w; c.height = h;
+    s = _sampleCanvases[key] = { c, ctx: c.getContext('2d', { willReadFrequently: true }) };
+  }
+  return s.ctx;
+}
+
 // ── Hard canvas state reset ───────────────────────────────────
 function resetCtx() {
   outCtx.globalAlpha = 1;
@@ -1487,36 +1548,32 @@ function resetCtx() {
 }
 
 // ── Main loop ─────────────────────────────────────────────────
-function loop(ts) {
-  animId = requestAnimationFrame(loop);
-
+// renderFrame does the actual drawing — called by rAF loop or rVFC depending on source
+function renderFrame(ts) {
   const activeVid = getActiveVideo();
   if (!activeVid || activeVid.readyState < 2) return;
   if (!output.width || !output.height) return;
 
   lastFrameTime = ts;
 
-  // fps counter
-  fpsFrames++;
-  if (ts - fpsLastTime >= 1000) {
-    document.getElementById('fps-text').textContent = fpsFrames + 'fps';
-    fpsFrames = 0; fpsLastTime = ts;
-  }
-
   const vw = output.width;
   const vh = output.height;
+
+  // Heavy modes throttled to 20fps in camera mode to avoid overheating mobile
+  // In file mode let it run at the video's natural frame rate — no throttle
+  const HEAVY_INTERVAL = 1000 / 20;
+  const isHeavy = (mode === 'dither' || mode === 'blob' || mode === 'motion');
+  if (isHeavy && videoSource === 'camera' && !isRecording && !isRendering && ts - lastHeavyTime < HEAVY_INTERVAL) return;
+  if (isHeavy) lastHeavyTime = ts;
+
+  // One video→canvas grab per frame; all effects read from it
+  grabFrame(vw, vh);
 
   // Feed segmentor async every 3 frames when subject cut is active (mediapipe only)
   if ((opts.segCut || opts.segShow || opts.scanCut) && document.getElementById('seg-method').value === 'mediapipe') {
     segSendCounter++;
-    if (segSendCounter % 1 === 0) sendToSegmentor();
+    if (segSendCounter % 3 === 0) sendToSegmentor();
   }
-
-  // Heavy modes throttled to 20fps to avoid stalls; lightweight modes run at full rAF speed
-  const HEAVY_INTERVAL = 1000 / 20;
-  const isHeavy = (mode === 'dither' || mode === 'blob' || mode === 'motion');
-  if (isHeavy && !isRecording && !isRendering && ts - lastHeavyTime < HEAVY_INTERVAL) return;
-  if (isHeavy) lastHeavyTime = ts;
 
   if      (mode === 'scan')   { resetCtx(); drawScan(vw, vh); }
   else if (mode === 'line')   { resetCtx(); drawLineRender(vw, vh); }
@@ -1526,6 +1583,26 @@ function loop(ts) {
   else if (mode === 'motion') { drawMotion(vw, vh); }
 
   frameCount++;
+
+  // fps = frames actually drawn (not screen refreshes), so it reflects real smoothness
+  fpsFrames++;
+  const now = performance.now();
+  if (now - fpsLastTime >= 1000) {
+    document.getElementById('fps-text').textContent = fpsFrames + 'fps';
+    fpsFrames = 0; fpsLastTime = now;
+  }
+}
+
+function loop(ts) {
+  animId = requestAnimationFrame(loop);
+
+  // Frame-exact render steps the video itself and calls renderFrame per frame
+  if (frameExactRendering) return;
+
+  // In file mode, rVFC drives rendering for frame-accurate decode timing — skip here
+  if (videoSource === 'file' && fileVideoRVFC && !isRecording && !isRendering) return;
+
+  renderFrame(ts);
 }
 
 // ── Slit-scan ─────────────────────────────────────────────────
@@ -1541,27 +1618,32 @@ function drawScan(vw, vh) {
   const total   = isHoriz ? vw : vh;
   const sliceW  = Math.ceil(total / slices);
 
-  // reuse tmpCanvas
-  tmpCtx.filter = sat !== 1 ? `saturate(${sat})` : 'none';
-  tmpCtx.drawImage(getActiveVideo(), 0, 0, vw, vh);
-  tmpCtx.filter = 'none';
+  // Only route through tmpCanvas when a saturation filter is needed;
+  // otherwise slice straight from the already-grabbed frame
+  let scanSrc = curFrame();
+  if (sat !== 1) {
+    tmpCtx.filter = `saturate(${sat})`;
+    tmpCtx.drawImage(scanSrc, 0, 0, vw, vh);
+    tmpCtx.filter = 'none';
+    scanSrc = tmpCanvas;
+  }
 
   for (let s = 0; s < speed; s++) {
     const pos = scanPos % slices;
     const px  = Math.floor(pos * sliceW);
     if (isHoriz) {
       const x1 = dir === 'right to left' ? total - px - sliceW : px;
-      scanCtx.drawImage(tmpCanvas, x1, 0, sliceW, vh, x1, 0, sliceW, vh);
+      scanCtx.drawImage(scanSrc, x1, 0, sliceW, vh, x1, 0, sliceW, vh);
     } else {
       const y1 = dir === 'bottom to top' ? total - px - sliceW : px;
-      scanCtx.drawImage(tmpCanvas, 0, y1, vw, sliceW, 0, y1, vw, sliceW);
+      scanCtx.drawImage(scanSrc, 0, y1, vw, sliceW, 0, y1, vw, sliceW);
     }
     scanPos++;
   }
 
   if (layerOrig) {
     // Draw live video as full-opacity base
-    outCtx.drawImage(getActiveVideo(), 0, 0, vw, vh);
+    outCtx.drawImage(curFrame(), 0, 0, vw, vh);
     // Clip to only the already-scanned region so the black unscanned
     // portion of scanCanvas never bleeds over the live video underneath
     const scannedPx = Math.min(total, Math.floor((scanPos % (slices + 1)) * sliceW));
@@ -1594,7 +1676,7 @@ function drawScan(vw, vh) {
 
   // Layer 3: subject cutout on top — zero extra computation, reuses segMaskSmoothed
   if (opts.scanCut && segMaskSmoothed && segMaskSmoothed.length === SEG_W*SEG_H) {
-    maskCtx.drawImage(getActiveVideo(), 0, 0, vw, vh);
+    maskCtx.drawImage(curFrame(), 0, 0, vw, vh);
     const frame = maskCtx.getImageData(0, 0, vw, vh);
     for (let i = 0; i < vw*vh; i++) {
       frame.data[i*4+3] = Math.round(segMaskSmoothed[i] * 255);
@@ -1610,7 +1692,7 @@ function computeFocusMask(vw, vh) {
   const sensitivity=parseInt(document.getElementById('focus-sensitivity').value);
   const spread=parseInt(document.getElementById('focus-spread').value);
   const smoothAmt=parseInt(document.getElementById('focus-smooth').value)/20;
-  maskCtx.drawImage(getActiveVideo(),0,0,dw,dh);
+  maskCtx.drawImage(curFrame(),0,0,dw,dh);
   const px=maskCtx.getImageData(0,0,dw,dh).data;
   const luma=new Float32Array(len);
   for(let i=0;i<len;i++) luma[i]=px[i*4]*0.299+px[i*4+1]*0.587+px[i*4+2]*0.114;
@@ -1672,9 +1754,9 @@ function drawLineRender(vw, vh) {
   if (!lineSampleCanvas || lineSampleCanvas.width !== sw || lineSampleCanvas.height !== sh) {
     lineSampleCanvas = document.createElement('canvas');
     lineSampleCanvas.width = sw; lineSampleCanvas.height = sh;
-    lineSampleCtx = lineSampleCanvas.getContext('2d');
+    lineSampleCtx = lineSampleCanvas.getContext('2d', { willReadFrequently: true });
   }
-  lineSampleCtx.drawImage(getActiveVideo(), 0, 0, sw, sh);
+  lineSampleCtx.drawImage(curFrame(), 0, 0, sw, sh);
   const imgData = lineSampleCtx.getImageData(0, 0, sw, sh).data;
 
   // Helper — maps full-res coords to half-res sample buffer
@@ -1790,12 +1872,15 @@ function drawLineRender(vw, vh) {
   const bgg = parseInt(bgHex.slice(3,5),16);
   const bgb = parseInt(bgHex.slice(5,7),16);
 
-  // Write into pixel buffer — one putImageData at the end instead of N*M fillRect calls
-  const buf = new Uint8ClampedArray(vw * vh * 4);
-  // Fill background colour
-  for (let i = 0; i < vw * vh; i++) {
-    buf[i*4]=bgr; buf[i*4+1]=bgg; buf[i*4+2]=bgb; buf[i*4+3]=255;
+  // Write into a persistent pixel buffer — one putImageData at the end.
+  // Reused across frames (was a fresh 3.7MB @720p / 33MB @4K allocation every frame)
+  if (!drawLineRender._img || drawLineRender._img.width !== vw || drawLineRender._img.height !== vh) {
+    drawLineRender._img = new ImageData(vw, vh);
+    drawLineRender._u32 = new Uint32Array(drawLineRender._img.data.buffer);
   }
+  const buf = drawLineRender._img.data;
+  // Fill background colour in one pass via a 32-bit view (little-endian RGBA)
+  drawLineRender._u32.fill(((255 << 24) | (bgb << 16) | (bgg << 8) | bgr) >>> 0);
 
   function paintPixel(x, y, r, g, b, a) {
     if (x < 0 || x >= vw || y < 0 || y >= vh) return;
@@ -1842,7 +1927,7 @@ function drawLineRender(vw, vh) {
     }
   }
 
-  outCtx.putImageData(new ImageData(buf, vw, vh), 0, 0);
+  outCtx.putImageData(drawLineRender._img, 0, 0);
 
   if (opts.lineGlow) {
     outCtx.filter='blur(3px)'; outCtx.globalAlpha=0.3;
@@ -1864,14 +1949,16 @@ function drawBlob(vw, vh) {
   const overlay   = document.getElementById('blob-overlay').value;
   const blobHex   = document.getElementById('blob-color').value;
   const bgMix     = parseInt(document.getElementById('blob-bgmix').value) / 100;
-  const lineWidth = parseInt(document.getElementById('blob-linewidth').value);
+  // Scale pixel sizes proportionally to canvas resolution vs 720p baseline
+  const resScale  = vw / 1280;
+  const lineWidth = Math.max(1, Math.round(parseInt(document.getElementById('blob-linewidth').value) * resScale));
   const trailLen  = parseInt(document.getElementById('blob-traillen').value);
   const trailFade = parseInt(document.getElementById('blob-trailfade').value) / 100;
   const scaleX    = vw / DETECT_W;
   const scaleY    = vh / DETECT_H;
 
   // Draw video downscaled to detection canvas
-  bgCtx.drawImage(getActiveVideo(), 0, 0, DETECT_W, DETECT_H);
+  bgCtx.drawImage(curFrame(), 0, 0, DETECT_W, DETECT_H);
   const frame = bgCtx.getImageData(0, 0, DETECT_W, DETECT_H);
   const fd = frame.data;
 
@@ -2015,37 +2102,37 @@ function drawBlob(vw, vh) {
 
   if (opts.blobInvert) {
     outCtx.filter = buildFilter('invert(1)');
-    outCtx.drawImage(getActiveVideo(), 0, 0, vw, vh);
+    outCtx.drawImage(curFrame(), 0, 0, vw, vh);
     outCtx.filter = 'none';
   } else if (grade === 'none') {
     outCtx.filter = buildFilter('');
     outCtx.globalAlpha = bgMix;
-    outCtx.drawImage(getActiveVideo(), 0, 0, vw, vh);
+    outCtx.drawImage(curFrame(), 0, 0, vw, vh);
     outCtx.globalAlpha = 1.0;
     outCtx.filter = 'none';
   } else if (grade === 'bw') {
     outCtx.filter = buildFilter('grayscale(1)');
-    outCtx.globalAlpha = bgMix; outCtx.drawImage(getActiveVideo(), 0, 0, vw, vh);
+    outCtx.globalAlpha = bgMix; outCtx.drawImage(curFrame(), 0, 0, vw, vh);
     outCtx.globalAlpha = 1.0; outCtx.filter = 'none';
   } else if (grade === 'bw-crush') {
     // B&W with crushed blacks — high contrast + brightness pull-down
     outCtx.filter = buildFilter('grayscale(1) brightness(0.75) contrast(1.6)');
-    outCtx.globalAlpha = bgMix; outCtx.drawImage(getActiveVideo(), 0, 0, vw, vh);
+    outCtx.globalAlpha = bgMix; outCtx.drawImage(curFrame(), 0, 0, vw, vh);
     outCtx.globalAlpha = 1.0; outCtx.filter = 'none';
   } else if (grade === 'bw-lift') {
     // Lifted blacks — faded/milky
     outCtx.filter = buildFilter('grayscale(1) brightness(1.2) contrast(0.7)');
-    outCtx.globalAlpha = bgMix; outCtx.drawImage(getActiveVideo(), 0, 0, vw, vh);
+    outCtx.globalAlpha = bgMix; outCtx.drawImage(curFrame(), 0, 0, vw, vh);
     outCtx.globalAlpha = 1.0; outCtx.filter = 'none';
   } else if (grade === 'bw-high') {
     // High contrast B&W — punchy
     outCtx.filter = buildFilter('grayscale(1) contrast(2.0) brightness(0.9)');
-    outCtx.globalAlpha = bgMix; outCtx.drawImage(getActiveVideo(), 0, 0, vw, vh);
+    outCtx.globalAlpha = bgMix; outCtx.drawImage(curFrame(), 0, 0, vw, vh);
     outCtx.globalAlpha = 1.0; outCtx.filter = 'none';
   } else if (grade === 'noir') {
     // Desaturated with deep blue-black tint
     outCtx.filter = buildFilter('grayscale(0.9) contrast(1.3) brightness(0.8)');
-    outCtx.globalAlpha = bgMix; outCtx.drawImage(getActiveVideo(), 0, 0, vw, vh);
+    outCtx.globalAlpha = bgMix; outCtx.drawImage(curFrame(), 0, 0, vw, vh);
     outCtx.globalAlpha = 1.0; outCtx.filter = 'none';
     // cool shadow tint overlay
     outCtx.globalCompositeOperation = 'multiply';
@@ -2057,7 +2144,7 @@ function drawBlob(vw, vh) {
   } else if (grade === 'thermal') {
     // Heat map — draw greyscale then tint using gradient overlay
     outCtx.filter = buildFilter('grayscale(1) contrast(1.2)');
-    outCtx.globalAlpha = bgMix; outCtx.drawImage(getActiveVideo(), 0, 0, vw, vh);
+    outCtx.globalAlpha = bgMix; outCtx.drawImage(curFrame(), 0, 0, vw, vh);
     outCtx.globalAlpha = 1.0; outCtx.filter = 'none';
     // colour map overlay: black→purple→red→orange→yellow→white
     const grad = outCtx.createLinearGradient(0, vh, 0, 0);
@@ -2076,7 +2163,7 @@ function drawBlob(vw, vh) {
   } else if (grade === 'phosphor') {
     // Classic green phosphor monitor
     outCtx.filter = buildFilter('grayscale(1) brightness(1.1) contrast(1.2)');
-    outCtx.globalAlpha = bgMix; outCtx.drawImage(getActiveVideo(), 0, 0, vw, vh);
+    outCtx.globalAlpha = bgMix; outCtx.drawImage(curFrame(), 0, 0, vw, vh);
     outCtx.globalAlpha = 1.0; outCtx.filter = 'none';
     outCtx.globalCompositeOperation = 'color';
     outCtx.fillStyle = '#00ff41';
@@ -2087,7 +2174,7 @@ function drawBlob(vw, vh) {
   } else if (grade === 'phosphor-amber') {
     // Amber phosphor — classic orange-yellow CRT (IBM 5151 style)
     outCtx.filter = buildFilter('grayscale(1) brightness(1.05) contrast(1.2)');
-    outCtx.globalAlpha = bgMix; outCtx.drawImage(getActiveVideo(), 0, 0, vw, vh);
+    outCtx.globalAlpha = bgMix; outCtx.drawImage(curFrame(), 0, 0, vw, vh);
     outCtx.globalAlpha = 1.0; outCtx.filter = 'none';
     outCtx.globalCompositeOperation = 'color';
     outCtx.fillStyle = '#ffaa00';
@@ -2098,7 +2185,7 @@ function drawBlob(vw, vh) {
   } else if (grade === 'blueprint') {
     // Blueprint / cyanotype
     outCtx.filter = buildFilter('grayscale(1) invert(1) brightness(1.1)');
-    outCtx.globalAlpha = bgMix; outCtx.drawImage(getActiveVideo(), 0, 0, vw, vh);
+    outCtx.globalAlpha = bgMix; outCtx.drawImage(curFrame(), 0, 0, vw, vh);
     outCtx.globalAlpha = 1.0; outCtx.filter = 'none';
     outCtx.globalCompositeOperation = 'color';
     outCtx.fillStyle = '#0044cc';
@@ -2109,11 +2196,11 @@ function drawBlob(vw, vh) {
   } else if (grade === 'bleach') {
     // Bleach bypass — desaturated with boosted contrast, retained colour skeleton
     outCtx.filter = buildFilter('saturate(0.3) contrast(1.5) brightness(0.85)');
-    outCtx.globalAlpha = bgMix; outCtx.drawImage(getActiveVideo(), 0, 0, vw, vh);
+    outCtx.globalAlpha = bgMix; outCtx.drawImage(curFrame(), 0, 0, vw, vh);
     // Overlay a desaturated copy at low alpha for the luminance crush
     outCtx.filter = 'grayscale(1) contrast(1.8)';
     outCtx.globalCompositeOperation = 'overlay';
-    outCtx.globalAlpha = 0.4; outCtx.drawImage(getActiveVideo(), 0, 0, vw, vh);
+    outCtx.globalAlpha = 0.4; outCtx.drawImage(curFrame(), 0, 0, vw, vh);
     outCtx.globalAlpha = 1.0; outCtx.filter = 'none';
     outCtx.globalCompositeOperation = 'source-over';
   }
@@ -2140,13 +2227,15 @@ function drawBlob(vw, vh) {
     } else if (overlay === 'outline') {
       outCtx.strokeRect(b.minX, b.minY, w, h);
       outCtx.beginPath();
-      outCtx.moveTo(b.cx-10,b.cy); outCtx.lineTo(b.cx+10,b.cy);
-      outCtx.moveTo(b.cx,b.cy-10); outCtx.lineTo(b.cx,b.cy+10);
+      const cs = Math.round(10 * resScale);
+      outCtx.moveTo(b.cx-cs,b.cy); outCtx.lineTo(b.cx+cs,b.cy);
+      outCtx.moveTo(b.cx,b.cy-cs); outCtx.lineTo(b.cx,b.cy+cs);
       outCtx.stroke();
     } else if (overlay === 'crosshair') {
       outCtx.beginPath();
-      outCtx.moveTo(b.cx-24,b.cy); outCtx.lineTo(b.cx+24,b.cy);
-      outCtx.moveTo(b.cx,b.cy-24); outCtx.lineTo(b.cx,b.cy+24);
+      const ch = Math.round(24 * resScale);
+      outCtx.moveTo(b.cx-ch,b.cy); outCtx.lineTo(b.cx+ch,b.cy);
+      outCtx.moveTo(b.cx,b.cy-ch); outCtx.lineTo(b.cx,b.cy+ch);
       outCtx.moveTo(b.minX,b.minY); outCtx.lineTo(b.maxX,b.minY);
       outCtx.moveTo(b.minX,b.maxY); outCtx.lineTo(b.maxX,b.maxY);
       outCtx.stroke();
@@ -2159,7 +2248,9 @@ function drawBlob(vw, vh) {
     if (opts.blobLabel) {
       const labelFormat = document.getElementById('blob-label-format').value;
       const labelStyle  = document.getElementById('blob-label-style').value;
-      const labelSize = parseInt(document.getElementById('blob-label-size').value);
+      // Scale label size proportionally to canvas resolution vs the 720p baseline
+      const labelSizeBase = parseInt(document.getElementById('blob-label-size').value);
+      const labelSize = Math.round(labelSizeBase * (vw / 1280));
       const labelFont   = document.getElementById('blob-label-font').value;
       const customText  = document.getElementById('blob-custom-text').value || 'TARGET';
 
@@ -2274,7 +2365,7 @@ function getDitherSampleCanvas(w, h) {
   if (!ditherSampleCanvas || ditherSampleCanvas.width !== w || ditherSampleCanvas.height !== h) {
     ditherSampleCanvas = document.createElement('canvas');
     ditherSampleCanvas.width = w; ditherSampleCanvas.height = h;
-    ditherSampleCtx = ditherSampleCanvas.getContext('2d');
+    ditherSampleCtx = ditherSampleCanvas.getContext('2d', { willReadFrequently: true });
   }
   return [ditherSampleCanvas, ditherSampleCtx];
 }
@@ -2312,8 +2403,9 @@ function drawAscii(vw, vh) {
   }
 
   // Sample video at grid resolution — tiny getImageData
-  tmpCtx.drawImage(getActiveVideo(), 0, 0, cols, rows);
-  const px = tmpCtx.getImageData(0, 0, cols, rows).data;
+  const asciiSampleCtx = getSampleCtx('ascii', cols, rows);
+  asciiSampleCtx.drawImage(curFrame(), 0, 0, cols, rows);
+  const px = asciiSampleCtx.getImageData(0, 0, cols, rows).data;
 
   asciiOffCtx.fillStyle = bgHex;
   asciiOffCtx.fillRect(0, 0, ow, oh);
@@ -2419,8 +2511,8 @@ function drawDither(vw, vh) {
   const contrast = parseInt(document.getElementById('dither-contrast').value) / 100;
   const invert   = opts.ditherInvert;
 
-  // Cap working resolution to avoid freezes — max 480p equivalent
-  const MAX_PIX = 480 * 270;
+  // Cap working resolution to avoid freezes — max 640×360 equivalent
+  const MAX_PIX = 640 * 360;
   let dw = Math.floor(vw / scale);
   let dh = Math.floor(vh / scale);
   const pixels = dw * dh;
@@ -2437,7 +2529,7 @@ function drawDither(vw, vh) {
 
   // Use dedicated small canvas for sampling — avoids tmpCanvas size mismatch
   const [sc, sctx] = getDitherSampleCanvas(dw, dh);
-  sctx.drawImage(getActiveVideo(), 0, 0, dw, dh);
+  sctx.drawImage(curFrame(), 0, 0, dw, dh);
   const src = sctx.getImageData(0, 0, dw, dh);
   const sd  = src.data;
 
@@ -2523,7 +2615,11 @@ function drawDither(vw, vh) {
   }
 
   // Render at dw×dh then scale up — much faster than full-res putImageData
-  const img = new ImageData(dw, dh);
+  // Reuse persistent ImageData buffer to avoid per-frame GC pressure
+  if (!drawDither._imgBuf || drawDither._imgBuf.width !== dw || drawDither._imgBuf.height !== dh) {
+    drawDither._imgBuf = new ImageData(dw, dh);
+  }
+  const img = drawDither._imgBuf;
   const id  = img.data;
   for (let i = 0; i < dw * dh; i++) {
     const on = out[i];
@@ -2558,7 +2654,7 @@ function drawPaletteDither(vw, vh, dw, dh, contrast) {
   const palName  = document.getElementById('dither-palette').value;
   const palette  = PALETTES[palName] || PALETTES.gameboy;
   const [sc, sctx] = getDitherSampleCanvas(dw, dh);
-  sctx.drawImage(getActiveVideo(), 0, 0, dw, dh);
+  sctx.drawImage(curFrame(), 0, 0, dw, dh);
   const src = sctx.getImageData(0, 0, dw, dh);
   const sd  = src.data;
   // Floyd-Steinberg dither to palette
@@ -2583,7 +2679,10 @@ function drawPaletteDither(vw, vh, dw, dh, contrast) {
       }
     }
   }
-  const img = new ImageData(dw, dh);
+  if (!drawPaletteDither._imgBuf || drawPaletteDither._imgBuf.width !== dw || drawPaletteDither._imgBuf.height !== dh) {
+    drawPaletteDither._imgBuf = new ImageData(dw, dh);
+  }
+  const img = drawPaletteDither._imgBuf;
   const id  = img.data;
   for (let i = 0; i < dw*dh; i++) {
     const si = i*3;
@@ -2603,7 +2702,7 @@ function drawDuotoneDither(vw, vh, dw, dh, contrast, thresh) {
   const sr = parseInt(shadow.slice(1,3),16),    sg = parseInt(shadow.slice(3,5),16),    sb = parseInt(shadow.slice(5,7),16);
   const hr = parseInt(highlight.slice(1,3),16), hg = parseInt(highlight.slice(3,5),16), hb = parseInt(highlight.slice(5,7),16);
   const [sc2, sctx2] = getDitherSampleCanvas(dw, dh);
-  sctx2.drawImage(getActiveVideo(), 0, 0, dw, dh);
+  sctx2.drawImage(curFrame(), 0, 0, dw, dh);
   const src = sctx2.getImageData(0, 0, dw, dh);
   const sd  = src.data;
   const luma = new Float32Array(dw*dh);
@@ -2655,6 +2754,32 @@ function motResetBg() {
   setStatus('◌ background reset');
 }
 
+// Box blur of radius r, in place on `a` (tmp is scratch of same length).
+// Horizontal pass a→tmp, vertical pass tmp→a, each with a sliding window.
+function boxBlurSeparable(a, tmp, w, h, r) {
+  for (let y = 0; y < h; y++) {
+    const row = y * w;
+    let sum = 0, cnt = 0;
+    for (let x = 0; x <= r && x < w; x++) { sum += a[row + x]; cnt++; }
+    for (let x = 0; x < w; x++) {
+      tmp[row + x] = sum / cnt;
+      const add = x + r + 1, rem = x - r;
+      if (add < w) { sum += a[row + add]; cnt++; }
+      if (rem >= 0) { sum -= a[row + rem]; cnt--; }
+    }
+  }
+  for (let x = 0; x < w; x++) {
+    let sum = 0, cnt = 0;
+    for (let y = 0; y <= r && y < h; y++) { sum += tmp[y * w + x]; cnt++; }
+    for (let y = 0; y < h; y++) {
+      a[y * w + x] = sum / cnt;
+      const add = y + r + 1, rem = y - r;
+      if (add < h) { sum += tmp[add * w + x]; cnt++; }
+      if (rem >= 0) { sum -= tmp[rem * w + x]; cnt--; }
+    }
+  }
+}
+
 function drawMotion(vw, vh) {
   const thresh   = parseInt(document.getElementById('mot-thresh').value);
   const sens     = parseInt(document.getElementById('mot-sens').value);
@@ -2680,8 +2805,9 @@ function drawMotion(vw, vh) {
   }
 
   // Sample current frame at half res
-  tmpCtx.drawImage(getActiveVideo(), 0, 0, dw, dh);
-  const cur = tmpCtx.getImageData(0, 0, dw, dh).data;
+  const motSampleCtx = getSampleCtx('motion', dw, dh);
+  motSampleCtx.drawImage(curFrame(), 0, 0, dw, dh);
+  const cur = motSampleCtx.getImageData(0, 0, dw, dh).data;
 
   // Init background model on first frame
   if (!motBgData) {
@@ -2694,8 +2820,12 @@ function drawMotion(vw, vh) {
     return;
   }
 
-  // Compute motion mask at half res
-  const motMask = new Float32Array(dw * dh);
+  // Compute motion mask at half res — persistent buffers, no per-frame allocation
+  if (!drawMotion._mask || drawMotion._mask.length !== dw * dh) {
+    drawMotion._mask = new Float32Array(dw * dh);
+    drawMotion._blurTmp = new Float32Array(dw * dh);
+  }
+  const motMask = drawMotion._mask;
   const learnRate = 0.05;
 
   for (let i = 0, j = 0; i < cur.length; i += 4, j += 3) {
@@ -2712,28 +2842,18 @@ function drawMotion(vw, vh) {
     }
   }
 
-  // Apply feathering (box blur on mask)
-  if (feather > 0) {
-    const tmp2 = new Float32Array(motMask);
-    for (let y = 0; y < dh; y++) {
-      for (let x = 0; x < dw; x++) {
-        let sum = 0, cnt = 0;
-        for (let dy = -feather; dy <= feather; dy++) {
-          for (let dx2 = -feather; dx2 <= feather; dx2++) {
-            const nx = x+dx2, ny = y+dy;
-            if (nx>=0&&nx<dw&&ny>=0&&ny<dh) { sum+=tmp2[ny*dw+nx]; cnt++; }
-          }
-        }
-        motMask[y*dw+x] = sum/cnt;
-      }
-    }
-  }
+  // Apply feathering (box blur on mask) — separable running-sum, O(1) per pixel
+  // Identical result to the 2D box average with edge-clamped counts
+  if (feather > 0) boxBlurSeparable(motMask, drawMotion._blurTmp, dw, dh, feather);
 
   // Show map mode — just draw the motion mask as greyscale
   if (showMap) {
     outCtx.fillStyle = '#000';
     outCtx.fillRect(0, 0, vw, vh);
-    const img = new ImageData(dw, dh);
+    if (!drawMotion._mapBuf || drawMotion._mapBuf.width !== dw || drawMotion._mapBuf.height !== dh) {
+      drawMotion._mapBuf = new ImageData(dw, dh);
+    }
+    const img = drawMotion._mapBuf;
     for (let i = 0; i < dw*dh; i++) {
       const v = Math.round(motMask[i] * 255);
       img.data[i*4]=v; img.data[i*4+1]=v; img.data[i*4+2]=v; img.data[i*4+3]=255;
@@ -2746,8 +2866,11 @@ function drawMotion(vw, vh) {
     return;
   }
 
-  // Build motion-revealed output image at half res
-  const img = new ImageData(dw, dh);
+  // Build motion-revealed output image at half res — reuse persistent buffer
+  if (!drawMotion._imgBuf || drawMotion._imgBuf.width !== dw || drawMotion._imgBuf.height !== dh) {
+    drawMotion._imgBuf = new ImageData(dw, dh);
+  }
+  const img = drawMotion._imgBuf;
   for (let i = 0; i < dw*dh; i++) {
     const a  = motMask[i];
     const si = i * 4;
@@ -2793,7 +2916,7 @@ function drawMotion(vw, vh) {
   // Optional BG blend — ghost of original camera feed
   if (bgBlend > 0) {
     outCtx.globalAlpha = bgBlend;
-    outCtx.drawImage(getActiveVideo(), 0, 0, vw, vh);
+    outCtx.drawImage(curFrame(), 0, 0, vw, vh);
     outCtx.globalAlpha = 1;
   }
 
@@ -2802,9 +2925,10 @@ function drawMotion(vw, vh) {
 
   // Flow arrows — sample motion grid and draw direction vectors
   if (flowArr) {
-    const gridSize = 32;
+    const motResScale = vw / 1280;
+    const gridSize = Math.round(32 * motResScale);
     outCtx.strokeStyle = grade === 'green' ? '#00ff41' : grade === 'amber' ? '#ffaa00' : '#ffffff';
-    outCtx.lineWidth = 1.5;
+    outCtx.lineWidth = Math.max(1, 1.5 * motResScale);
     if (glow) { outCtx.shadowColor = outCtx.strokeStyle; outCtx.shadowBlur = 6; }
 
     for (let gy = gridSize; gy < vh - gridSize; gy += gridSize) {
@@ -2835,16 +2959,21 @@ function drawMotion(vw, vh) {
         const angle = Math.atan2(ey - gy, ex - gx);
         outCtx.beginPath();
         outCtx.moveTo(ex, ey);
-        outCtx.lineTo(ex - 8*Math.cos(angle-0.4), ey - 8*Math.sin(angle-0.4));
+        const arrowHead = Math.round(8 * motResScale);
+        outCtx.lineTo(ex - arrowHead*Math.cos(angle-0.4), ey - arrowHead*Math.sin(angle-0.4));
         outCtx.moveTo(ex, ey);
-        outCtx.lineTo(ex - 8*Math.cos(angle+0.4), ey - 8*Math.sin(angle+0.4));
+        outCtx.lineTo(ex - arrowHead*Math.cos(angle+0.4), ey - arrowHead*Math.sin(angle+0.4));
         outCtx.stroke();
       }
     }
     outCtx.shadowBlur = 0;
   }
 
-  setStatus(`◌ motion — ${Math.round(motMask.reduce((a,b)=>a+b,0)/motMask.length*100)}% active`);
+  // Status text every 15 frames — a DOM write per frame forces layout work
+  if (frameCount % 15 === 0 && !isRendering) {
+    let s = 0; for (let i = 0; i < motMask.length; i++) s += motMask[i];
+    setStatus(`◌ motion — ${Math.round(s / motMask.length * 100)}% active`);
+  }
 }
 
 
@@ -2882,8 +3011,212 @@ function diagRecord() {
 }
 
 // ── Offline renderer ──────────────────────────────────────────
-// Captures the live canvas stream while the file video plays through once
-function startOfflineRender() {
+// Preferred: frame-exact render. Steps the video one frame at a time, runs the
+// effect at full source resolution, and encodes each frame with WebCodecs
+// (hardware H.264/HEVC) into an MP4 with exact timestamps. Takes as long as it
+// needs — no frame is ever dropped, so 4K output plays back perfectly smooth.
+// Fallback (no WebCodecs): live canvas capture while the video plays (legacy).
+const MP4_MUXER_URL = 'https://unpkg.com/mp4-muxer@5.2.1/build/mp4-muxer.js';
+let _muxerLoad = null;
+function loadMp4Muxer() {
+  if (window.Mp4Muxer) return Promise.resolve();
+  if (_muxerLoad) return _muxerLoad;
+  _muxerLoad = new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = MP4_MUXER_URL; s.crossOrigin = 'anonymous';
+    s.onload = () => window.Mp4Muxer ? resolve() : reject(new Error('muxer missing'));
+    s.onerror = () => { _muxerLoad = null; reject(new Error('muxer load failed')); };
+    document.head.appendChild(s);
+  });
+  return _muxerLoad;
+}
+
+function detectSourceFps() {
+  const d = fileVideo && fileVideo._minFrameDelta;
+  if (!d) return 30;
+  const raw = 1 / d;
+  const common = [23.976, 24, 25, 29.97, 30, 48, 50, 59.94, 60];
+  let best = 30, bestErr = Infinity;
+  for (const c of common) { const e = Math.abs(c - raw); if (e < bestErr) { bestErr = e; best = c; } }
+  return bestErr / best < 0.06 ? best : 30;
+}
+
+async function pickEncoderConfig(w, h, fps) {
+  if (typeof VideoEncoder === 'undefined' || typeof VideoFrame === 'undefined') return null;
+  // Effects (dither/noise/lines) are high-detail — give the encoder generous bitrate
+  const bitrate = Math.round(Math.min(80e6, Math.max(6e6, w * h * fps * 0.15)));
+  const candidates = [
+    { codec: 'avc1.640033', mux: 'avc'  },   // H.264 High L5.1 — up to 4096×2304@30
+    { codec: 'avc1.640034', mux: 'avc'  },   // H.264 High L5.2 — 4K@60
+    { codec: 'avc1.4d0034', mux: 'avc'  },   // H.264 Main L5.2
+    { codec: 'avc1.640028', mux: 'avc'  },   // H.264 High L4.0 — ≤1080p
+    { codec: 'hvc1.1.6.L153.B0', mux: 'hevc' }, // HEVC Main L5.1
+    { codec: 'hvc1.1.6.L156.B0', mux: 'hevc' }  // HEVC Main L5.2
+  ];
+  for (const c of candidates) {
+    const config = { codec: c.codec, width: w, height: h, bitrate, framerate: fps,
+                     latencyMode: 'quality' };
+    if (c.mux === 'avc') config.avc = { format: 'avc' };
+    try {
+      const r = await VideoEncoder.isConfigSupported(config);
+      if (r && r.supported) return { config: r.config || config, mux: c.mux };
+    } catch (e) { /* try next */ }
+  }
+  return null;
+}
+
+async function startOfflineRender() {
+  if (isRendering) return;
+  if (!fileVideo) { setStatus('⚠ No file loaded'); return; }
+  if (typeof VideoEncoder !== 'undefined' && typeof VideoFrame !== 'undefined') {
+    try {
+      setStatus('⚙ Preparing render…');
+      await loadMp4Muxer();
+      const fps = detectSourceFps();
+      let rw = fileVideo._srcW || fileVideo.videoWidth, rh = fileVideo._srcH || fileVideo.videoHeight;
+      rw -= rw % 2; rh -= rh % 2;  // H.264/HEVC 4:2:0 needs even dimensions
+      const enc = await pickEncoderConfig(rw, rh, fps);
+      if (enc) return await frameExactRender(rw, rh, fps, enc);
+      console.warn('No WebCodecs config for', rw, rh, '— falling back to live capture');
+    } catch (e) {
+      console.warn('Frame-exact render unavailable, falling back:', e);
+    }
+  }
+  startRealtimeRender();
+}
+
+function waitSeek(t, frameSecs) {
+  return new Promise(resolve => {
+    let done = false, seeked = false, presented = !('requestVideoFrameCallback' in fileVideo);
+    const tol = frameSecs * 0.75;
+    const finish = () => { if (!done && seeked && presented) { done = true; clearTimeout(guard); resolve(); } };
+    // Wait for BOTH 'seeked' and the frame AT THE TARGET TIME being presented.
+    // Safari can fire 'seeked' before the decoded frame is ready for drawImage, and a
+    // callback can arrive for a stale in-flight frame — so check its mediaTime.
+    function onFrame(now, meta) {
+      if (done) return;
+      if (!meta || typeof meta.mediaTime !== 'number' || Math.abs(meta.mediaTime - t) <= tol) {
+        presented = true; finish();
+      } else {
+        fileVideo.requestVideoFrameCallback(onFrame);
+      }
+    }
+    if (!presented) fileVideo.requestVideoFrameCallback(onFrame);
+    fileVideo.addEventListener('seeked', function on() {
+      fileVideo.removeEventListener('seeked', on);
+      seeked = true;
+      // Safety net: if the target frame was already on screen no new callback fires
+      if (!presented) setTimeout(() => { presented = true; finish(); }, 400);
+      finish();
+    });
+    const guard = setTimeout(() => { done = true; resolve(); }, 5000); // never hang
+    fileVideo.currentTime = t;
+  });
+}
+
+async function frameExactRender(rw, rh, fps, enc) {
+  isRendering = true;
+  frameExactRendering = true;
+  let cancelled = false;
+  recordedChunks = []; recordedBlob = null;
+  document.getElementById('btn-save').style.display = 'none';
+  const btn = document.getElementById('btn-record');
+
+  const wasLoop = fileVideo.loop;
+  fileVideo.pause();
+  fileVideo.loop = false;
+
+  // Swap to full source resolution — never capped
+  const prevW = output.width, prevH = output.height;
+  output.width = rw; output.height = rh;
+  tmpCanvas.width = rw; tmpCanvas.height = rh;
+  maskCanvas.width = rw; maskCanvas.height = rh;
+  scanCanvas.width = rw; scanCanvas.height = rh;
+  scanCtx.fillStyle = '#000'; scanCtx.fillRect(0, 0, rw, rh);
+  drawBlob._bgData = null; motBgData = null;
+  resetScan(); scanPos = 0;
+
+  btn.textContent = '⏹ STOP';
+  btn.style.background = '#330000';
+  btn.onclick = () => { cancelled = true; setRenderStatus('⏹ Stopping — saving what\'s rendered…'); };
+  document.getElementById('rec-dot').style.display = 'block';
+
+  const target = new Mp4Muxer.ArrayBufferTarget();
+  const muxer = new Mp4Muxer.Muxer({
+    target,
+    video: { codec: enc.mux, width: rw, height: rh, frameRate: fps },
+    fastStart: false,
+    firstTimestampBehavior: 'offset'
+  });
+  let encError = null;
+  const encoder = new VideoEncoder({
+    output: (chunk, meta) => muxer.addVideoChunk(chunk, meta),
+    error: e => { encError = e; }
+  });
+  encoder.configure(enc.config);
+
+  const duration = fileVideo.duration;
+  const total = Math.max(1, Math.floor(duration * fps));
+  const frameDur = 1e6 / fps;   // microseconds
+  const keyEvery = Math.round(fps * 2);
+  const t0 = performance.now();
+  let encoded = 0;
+
+  try {
+    for (let i = 0; i < total && !cancelled; i++) {
+      if (encError) throw encError;
+      // Seek to the middle of frame i so rounding never lands on the previous frame
+      await waitSeek(Math.min(duration - 0.001, (i + 0.5) / fps), 1 / fps);
+      renderFrame(performance.now());
+      const vf = new VideoFrame(output, { timestamp: Math.round(i * frameDur), duration: Math.round(frameDur) });
+      encoder.encode(vf, { keyFrame: i % keyEvery === 0 });
+      vf.close();
+      encoded++;
+      // Backpressure — don't let the encoder queue balloon memory at 4K
+      while (encoder.encodeQueueSize > 3) await new Promise(r => setTimeout(r, 4));
+      if (i % 3 === 0 || i === total - 1) {
+        const pct = Math.round((i + 1) / total * 100);
+        const el = (performance.now() - t0) / 1000;
+        const eta = Math.max(0, Math.round(el / (i + 1) * (total - i - 1)));
+        setRenderStatus(`⚙ Rendering ${rw}×${rh} @${fps}fps — ${i + 1}/${total} (${pct}%) ~${eta}s left`);
+      }
+    }
+    await encoder.flush();
+    if (encError) throw encError;
+    encoder.close();
+    muxer.finalize();
+    recordedBlob = new Blob([target.buffer], { type: 'video/mp4' });
+    recordedBlob._ext = 'mp4';
+    const secs = Math.round((performance.now() - t0) / 1000);
+    setRenderStatus(`✓ Done — ${rw}×${rh} @${fps}fps, ${encoded} frames${cancelled ? ' (stopped early)' : ''} in ${secs}s`, 6000);
+    document.getElementById('btn-save').style.display = encoded ? 'block' : 'none';
+  } catch (e) {
+    console.error('render failed', e);
+    try { encoder.close(); } catch (_) {}
+    setRenderStatus('⚠ Render failed: ' + (e && e.message ? e.message : e), 8000);
+  } finally {
+    // Restore preview resolution + state, resume looping preview
+    output.width = prevW; output.height = prevH;
+    tmpCanvas.width = prevW; tmpCanvas.height = prevH;
+    maskCanvas.width = prevW; maskCanvas.height = prevH;
+    scanCanvas.width = prevW; scanCanvas.height = prevH;
+    scanCtx.fillStyle = '#000'; scanCtx.fillRect(0, 0, prevW, prevH);
+    drawBlob._bgData = null; motBgData = null;
+    resetScan(); scanPos = 0;
+    frameExactRendering = false;
+    isRendering = false;
+    btn.textContent = '⚙ RENDER';
+    btn.style.background = '#1a000099';
+    btn.onclick = onRecordBtn;
+    document.getElementById('rec-dot').style.display = 'none';
+    fileVideo.loop = wasLoop;
+    fileVideo.currentTime = 0;
+    fileVideo.play().catch(() => {});
+  }
+}
+
+// Legacy live-capture render (fallback when WebCodecs is unavailable)
+function startRealtimeRender() {
   if (isRendering) return;
   if (!fileVideo) { setStatus('⚠ No file loaded'); return; }
 
@@ -2938,6 +3271,9 @@ function startOfflineRender() {
     drawBlob._bgData = null;
     motBgData = null;
     resetScan(); scanPos = 0;
+    // Resume looping preview (video is paused at the end after onended)
+    fileVideo.currentTime = 0;
+    fileVideo.play().catch(() => {});
   }
 
   // Rewind and play from start
@@ -3046,7 +3382,17 @@ function saveRecording() {
   setStatus('Saved');
 }
 
-function setStatus(msg) { document.getElementById('status-text').textContent = msg; }
+// Effects post status every frame; during a frame-exact render (and for a few
+// seconds after it finishes) only render messages may write to the status line.
+let statusHoldUntil = 0;
+function setStatus(msg) {
+  if (frameExactRendering || performance.now() < statusHoldUntil) return;
+  document.getElementById('status-text').textContent = msg;
+}
+function setRenderStatus(msg, holdMs) {
+  document.getElementById('status-text').textContent = msg;
+  if (holdMs) statusHoldUntil = performance.now() + holdMs;
+}
 </script>
 </body>
 </html>
