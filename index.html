@@ -2910,13 +2910,34 @@ function startOfflineRender() {
   output.width = rw; output.height = rh;
   outCtx = output.getContext('2d');
 
+  // Resize all dependent canvases to match full-res output
+  tmpCanvas.width = rw; tmpCanvas.height = rh;
+  maskCanvas.width = rw; maskCanvas.height = rh;
+  scanCanvas.width = rw; scanCanvas.height = rh;
+  scanCtx.fillStyle = '#000'; scanCtx.fillRect(0, 0, rw, rh);
+
+  // Reset all stateful effect data — background models built at preview size
+  // would produce ghost trails at render resolution
+  drawBlob._bgData = null;
+  motBgData = null;
+  resetScan();
+  scanPos = 0;
+
   function stopRender() {
     fileVideo.onended = null;
     fileVideo.loop = true;
     if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
-    // Restore preview resolution
+    // Restore preview resolution and canvases
     output.width = prevW; output.height = prevH;
     outCtx = output.getContext('2d');
+    tmpCanvas.width = prevW; tmpCanvas.height = prevH;
+    maskCanvas.width = prevW; maskCanvas.height = prevH;
+    scanCanvas.width = prevW; scanCanvas.height = prevH;
+    scanCtx.fillStyle = '#000'; scanCtx.fillRect(0, 0, prevW, prevH);
+    // Reset state so preview doesn't inherit render artifacts
+    drawBlob._bgData = null;
+    motBgData = null;
+    resetScan(); scanPos = 0;
   }
 
   // Rewind and play from start
