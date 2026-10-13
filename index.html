@@ -238,7 +238,7 @@
   <p>Phosfein Design<br><br>slit-scan · line renderer · blob tracker<br><br><small style="color:#555;font-size:9px">Open in Safari · Allow camera when prompted</small></p>
   <button id="btn-start-cam" onclick="initCamera('environment')">📷 START CAMERA</button>
   <button id="btn-start-file" onclick="startFromFile()" style="background:transparent;color:var(--cyan);border:1px solid var(--cyan-dim);font-family:'Courier New',monospace;font-size:11px;letter-spacing:2px;padding:10px 20px;border-radius:3px;cursor:pointer;margin-top:4px;">📁 LOAD VIDEO FILE</button>
-  <div style="color:#555;font-size:10px;letter-spacing:2px;margin-top:14px;">VERSION v11</div>
+  <div style="color:#555;font-size:10px;letter-spacing:2px;margin-top:14px;">VERSION v12</div>
 </div>
 
 <div id="app" style="display:none">
@@ -274,7 +274,7 @@
     <div id="statusbar">
       <div id="rec-dot"></div>
       <div id="status-text">ready</div>
-      <div id="fps-text">v11</div>
+      <div id="fps-text">v12</div>
     </div>
 
     <!-- Action bar floats bottom -->
@@ -1424,6 +1424,7 @@ function toggleSource() {
 }
 
 function switchToCamera() {
+  resetPreviewProxy();
   videoSource='camera';
   fileVideoRVFC = false;
   if(fileVideo){fileVideo.pause();fileVideo.src='';}
@@ -1439,6 +1440,7 @@ function switchToCamera() {
 
 function loadVideoFile(input) {
   if(!input.files||!input.files[0]) return;
+  resetPreviewProxy();
   const file=input.files[0];
   const url=URL.createObjectURL(file);
   fileVideo=document.getElementById('file-video');
@@ -1480,8 +1482,9 @@ function loadVideoFile(input) {
           }
           thisVid._lastMediaTime = meta.mediaTime;
         }
-        // Frame-exact render drives its own draws — don't double-advance effects
-        if (!frameExactRendering) renderFrame(now);
+        // Frame-exact render drives its own draws; proxy build shows its own frames;
+        // once the proxy is ready, the proxy's loop drives preview instead
+        if (!frameExactRendering && !proxyBuilding && (!proxyReady || isRendering)) renderFrame(now);
         thisVid.requestVideoFrameCallback(rVFCLoop);
       }
       fileVideo.requestVideoFrameCallback(rVFCLoop);
@@ -1492,6 +1495,7 @@ function loadVideoFile(input) {
     document.getElementById('btn-flip').style.opacity='0.3';
     document.getElementById('btn-record').textContent='⚙ RENDER';
     setStatus('▶ '+file.name.slice(0,24));
+    buildPreviewProxy();
   };
   sourceFileObj = file;
   fileVideo.onerror=function(){setStatus('⚠ Could not load video'); videoSource='camera';};
@@ -1499,7 +1503,12 @@ function loadVideoFile(input) {
 
 // ── Active video source helper ────────────────────────────────
 function getActiveVideo() {
-  if (videoSource === 'file' && fileVideo) return fileVideo;
+  if (videoSource === 'file' && fileVideo) {
+    // Preview runs from the lightweight 720p proxy once it's built;
+    // renders (and the proxy build itself) always read the full-res original
+    if (proxyReady && proxyVideo && !isRendering && !proxyBuilding) return proxyVideo;
+    return fileVideo;
+  }
   return document.getElementById('video');
 }
 
@@ -1747,8 +1756,13 @@ function renderFrame(ts) {
       perfLastVF = q.totalVideoFrames - q.droppedVideoFrames;
     }
     const n = Math.max(1, fpsFrames);
+    // Safari defers video work until pixels are needed, so a grab/fx split is
+    // misleading there — show total time per frame and which source is feeding preview
+    const srcName = videoSource !== 'file' ? 'camera'
+      : (proxyReady && !isRendering) ? `proxy ${proxyVideo.videoWidth}×${proxyVideo.videoHeight}`
+      : proxyBuilding ? 'building proxy' : 'original';
     document.getElementById('fps-text').textContent =
-      `v11 · ${Math.round(fpsFrames / secs)}fps${srcTxt} · grab ${Math.round(perfGrabMs / n)}ms · fx ${Math.round(perfFxMs / n)}ms`;
+      `v12 · ${Math.round(fpsFrames / secs)}fps · ${Math.round((perfGrabMs + perfFxMs) / n)}ms/frame · ${srcName}`;
     fpsFrames = 0; fpsLastTime = now; perfGrabMs = 0; perfFxMs = 0;
   }
 }
@@ -3193,6 +3207,160 @@ function diagRecord() {
   } catch(e) { lines.push('ERR: ' + e.message); alert(lines.join('\n')); }
 }
 
+// ── Preview proxy ─────────────────────────────────────────────
+// Phone video is usually 4K 10-bit HDR. Pulling each of those frames into a canvas
+// (HDR→SDR conversion + 4K scale) costs ~40ms on iPhone — more than a 24fps frame
+// budget — before any effect runs. Like pro editors (LumaFusion, Premiere), we make
+// a lightweight 720p SDR "proxy" copy once when the file loads and run the live
+// preview from it. RENDER always uses the full-resolution original.
+let proxyVideo = null, proxyURL = null, proxyReady = false, proxyBuilding = false, proxyToken = 0;
+
+function resetPreviewProxy() {
+  proxyToken++;
+  proxyBuilding = false; proxyReady = false;
+  if (proxyVideo) { proxyVideo.pause(); proxyVideo.removeAttribute('src'); proxyVideo.load(); }
+  if (proxyURL) { URL.revokeObjectURL(proxyURL); proxyURL = null; }
+}
+function cancelProxyBuild() {
+  proxyToken++;               // the build loop sees the token change and stops
+  proxyBuilding = false;
+  if (fileVideo) { fileVideo.pause(); fileVideo.loop = true; }
+}
+function resumeFilePreview() {
+  if (proxyReady && proxyVideo) {
+    fileVideo.pause();
+    proxyVideo.currentTime = 0;
+    proxyVideo.play().catch(() => {});
+  } else if (fileVideo) {
+    fileVideo.currentTime = 0;
+    fileVideo.play().catch(() => {});
+    // A render interrupted the proxy build — start it again
+    if (!proxyBuilding && videoSource === 'file') setTimeout(() => { if (!isRendering && !proxyReady && !proxyBuilding) buildPreviewProxy(); }, 500);
+  }
+}
+
+async function pickProxyEncoderConfig(w, h) {
+  if (typeof VideoEncoder === 'undefined' || typeof VideoFrame === 'undefined') return null;
+  for (const codec of ['avc1.640028', 'avc1.4d0028', 'avc1.42e028', 'avc1.640033']) {
+    const config = { codec, width: w, height: h, bitrate: 8e6, framerate: 30, avc: { format: 'avc' } };
+    try { const r = await VideoEncoder.isConfigSupported(config); if (r && r.supported) return { config: r.config || config, mux: 'avc' }; } catch (e) {}
+  }
+  return null;
+}
+
+async function buildPreviewProxy() {
+  const token = ++proxyToken;
+  const vid = fileVideo;
+  if (!vid || !('requestVideoFrameCallback' in vid)) return;
+  const srcW = vid.videoWidth, srcH = vid.videoHeight;
+  const sc = previewScale(srcW, srcH);
+  if (sc >= 1) return;                          // already preview-sized — nothing to gain
+  let pw = Math.round(srcW * sc), ph = Math.round(srcH * sc);
+  pw -= pw % 2; ph -= ph % 2;
+  let enc;
+  try {
+    await loadMp4Muxer();
+    enc = await pickProxyEncoderConfig(pw, ph);
+  } catch (e) { console.warn('proxy unavailable:', e); return; }
+  if (!enc || token !== proxyToken || isRendering) return;
+
+  proxyBuilding = true;
+  const pc = document.createElement('canvas'); pc.width = pw; pc.height = ph;
+  const pctx = pc.getContext('2d', { alpha: false });
+  const target = new Mp4Muxer.ArrayBufferTarget();
+  const muxer = new Mp4Muxer.Muxer({ target, video: { codec: enc.mux, width: pw, height: ph },
+    fastStart: 'in-memory', firstTimestampBehavior: 'offset' });
+  let encErr = null;
+  const encoder = new VideoEncoder({ output: (c, m) => muxer.addVideoChunk(c, m), error: e => { encErr = e; } });
+  encoder.configure(enc.config);
+
+  const abort = (why) => {
+    try { encoder.close(); } catch (e) {}
+    vid.playbackRate = 1;
+    if (token === proxyToken) proxyBuilding = false;
+    if (why) console.warn('proxy build stopped:', why);
+  };
+
+  // Play the original through once at normal speed, capturing every presented frame
+  vid.pause(); vid.loop = false;
+  await new Promise(r => { vid.addEventListener('seeked', r, { once: true }); vid.currentTime = 0; });
+  if (token !== proxyToken) return abort();
+
+  let lastT = -1, n = 0, missedWin = 0, missedTotal = 0, cooldownUntil = 0, rate = 1;
+  const dur = vid.duration || 1;
+  vid.playbackRate = 1;
+  const onFrame = (now, meta) => {
+    if (token !== proxyToken) return abort();
+    const t = meta && typeof meta.mediaTime === 'number' ? meta.mediaTime : vid.currentTime;
+    if (t > lastT + 0.0005) {
+      // Every source frame must reach the proxy, or the preview inherits the gaps.
+      // If the decoder can't keep up at this speed, slow playback down and carry on.
+      const fi = vid._minFrameDelta;
+      if (fi && lastT >= 0 && t - lastT > fi * 1.5) missedWin += Math.round((t - lastT) / fi) - 1;
+      // React on the first miss, then give the new speed a few frames to settle
+      if (missedWin > 0 && rate > 0.25 && n >= cooldownUntil) {
+        rate = Math.max(0.25, rate * 0.6); vid.playbackRate = rate;
+        cooldownUntil = n + 4; missedTotal += missedWin;
+      }
+      missedWin = 0;
+      pctx.drawImage(vid, 0, 0, pw, ph);
+      try {
+        const vf = new VideoFrame(pc, { timestamp: Math.round(t * 1e6) });
+        encoder.encode(vf, { keyFrame: n % 48 === 0 });
+        vf.close(); n++; lastT = t;
+      } catch (e) { return abort(e); }
+      // Show the clip playing (without effects) while the proxy is prepared
+      outCtx.drawImage(pc, 0, 0, output.width, output.height);
+      if (n % 6 === 0) setStatus(`⚙ Preparing smooth preview… ${Math.min(99, Math.round(t / dur * 100))}%${rate < 1 ? ' (slowed to catch every frame)' : ''}`);
+    }
+    if (!vid.ended) vid.requestVideoFrameCallback(onFrame);
+  };
+  vid.requestVideoFrameCallback(onFrame);
+
+  vid.addEventListener('ended', async function onEnd() {
+    vid.removeEventListener('ended', onEnd);
+    if (token !== proxyToken) return abort();
+    try {
+      await encoder.flush();
+      if (encErr) throw encErr;
+      encoder.close();
+      muxer.finalize();
+      if (token !== proxyToken) return;
+      proxyURL = URL.createObjectURL(new Blob([target.buffer], { type: 'video/mp4' }));
+      if (!proxyVideo) {
+        proxyVideo = document.createElement('video');
+        proxyVideo.setAttribute('playsinline', ''); proxyVideo.muted = true; proxyVideo.loop = true;
+        // Rendered but invisible — iOS deprioritises decoding for display:none video
+        proxyVideo.style.cssText = 'position:fixed;left:0;top:0;width:2px;height:2px;opacity:0.01;pointer-events:none;z-index:-1';
+        document.body.appendChild(proxyVideo);
+      }
+      proxyVideo.src = proxyURL;
+      await new Promise((res, rej) => { proxyVideo.onloadeddata = res; proxyVideo.onerror = () => rej(new Error('proxy would not play')); });
+      if (token !== proxyToken) return;
+      proxyBuilding = false;
+      proxyReady = true;
+      vid.playbackRate = 1;
+      vid.loop = true; vid.pause();
+      // Proxy drives the live preview at its own decoded frame rate
+      const pv = proxyVideo, myURL = proxyURL;
+      const proxyLoop = (now) => {
+        if (!proxyReady || pv.src !== myURL || videoSource !== 'file') return;
+        if (!frameExactRendering && !isRendering) renderFrame(now);
+        pv.requestVideoFrameCallback(proxyLoop);
+      };
+      pv.requestVideoFrameCallback(proxyLoop);
+      drawBlob._bgData = null; motBgData = null; resetScan();
+      await pv.play().catch(() => {});
+      setStatus(`✓ Smooth preview ready (${pw}×${ph}) — renders still use full ${srcW}×${srcH}`);
+    } catch (e) {
+      abort(e);
+      vid.loop = true; vid.currentTime = 0; vid.play().catch(() => {});
+      setStatus('▶ Preview from original (proxy unavailable)');
+    }
+  });
+  vid.play().catch(e => abort(e));
+}
+
 // ── Offline renderer ──────────────────────────────────────────
 // Preferred: frame-exact render. Steps the video one frame at a time, runs the
 // effect at full source resolution, and encodes each frame with WebCodecs
@@ -3259,6 +3427,8 @@ async function pickEncoderConfig(w, h, fps) {
 async function startOfflineRender() {
   if (isRendering) return;
   if (!fileVideo) { setStatus('⚠ No file loaded'); return; }
+  if (proxyBuilding) cancelProxyBuild();   // render needs the original video to itself
+  if (proxyVideo) proxyVideo.pause();
   if (typeof VideoEncoder !== 'undefined' && typeof VideoFrame !== 'undefined') {
     try {
       setStatus('⚙ Preparing render…');
@@ -3401,8 +3571,7 @@ async function frameExactRender(rw, rh, fps, enc) {
     btn.onclick = onRecordBtn;
     document.getElementById('rec-dot').style.display = 'none';
     fileVideo.loop = wasLoop;
-    fileVideo.currentTime = 0;
-    fileVideo.play().catch(() => {});
+    resumeFilePreview();
   }
 }
 
@@ -3463,8 +3632,8 @@ function startRealtimeRender() {
     motBgData = null;
     resetScan(); scanPos = 0;
     // Resume looping preview (video is paused at the end after onended)
-    fileVideo.currentTime = 0;
-    fileVideo.play().catch(() => {});
+    fileVideo.loop = true;
+    resumeFilePreview();
   }
 
   // Rewind and play from start
