@@ -238,6 +238,7 @@
   <p>Phosfein Design<br><br>slit-scan · line renderer · blob tracker<br><br><small style="color:#555;font-size:9px">Open in Safari · Allow camera when prompted</small></p>
   <button id="btn-start-cam" onclick="initCamera('environment')">📷 START CAMERA</button>
   <button id="btn-start-file" onclick="startFromFile()" style="background:transparent;color:var(--cyan);border:1px solid var(--cyan-dim);font-family:'Courier New',monospace;font-size:11px;letter-spacing:2px;padding:10px 20px;border-radius:3px;cursor:pointer;margin-top:4px;">📁 LOAD VIDEO FILE</button>
+  <div style="color:#555;font-size:10px;letter-spacing:2px;margin-top:14px;">VERSION v11</div>
 </div>
 
 <div id="app" style="display:none">
@@ -273,7 +274,7 @@
     <div id="statusbar">
       <div id="rec-dot"></div>
       <div id="status-text">ready</div>
-      <div id="fps-text">--fps</div>
+      <div id="fps-text">v11</div>
     </div>
 
     <!-- Action bar floats bottom -->
@@ -1747,7 +1748,7 @@ function renderFrame(ts) {
     }
     const n = Math.max(1, fpsFrames);
     document.getElementById('fps-text').textContent =
-      `${Math.round(fpsFrames / secs)}fps${srcTxt} · grab ${Math.round(perfGrabMs / n)}ms · fx ${Math.round(perfFxMs / n)}ms`;
+      `v11 · ${Math.round(fpsFrames / secs)}fps${srcTxt} · grab ${Math.round(perfGrabMs / n)}ms · fx ${Math.round(perfFxMs / n)}ms`;
     fpsFrames = 0; fpsLastTime = now; perfGrabMs = 0; perfFxMs = 0;
   }
 }
