@@ -238,7 +238,7 @@
   <p>Phosfein Design<br><br>slit-scan · line renderer · blob tracker<br><br><small style="color:#555;font-size:9px">Open in Safari · Allow camera when prompted</small></p>
   <button id="btn-start-cam" onclick="initCamera('environment')">📷 START CAMERA</button>
   <button id="btn-start-file" onclick="startFromFile()" style="background:transparent;color:var(--cyan);border:1px solid var(--cyan-dim);font-family:'Courier New',monospace;font-size:11px;letter-spacing:2px;padding:10px 20px;border-radius:3px;cursor:pointer;margin-top:4px;">📁 LOAD VIDEO FILE</button>
-  <div style="color:#555;font-size:10px;letter-spacing:2px;margin-top:14px;">VERSION v13</div>
+  <div style="color:#555;font-size:10px;letter-spacing:2px;margin-top:14px;">VERSION v14</div>
 </div>
 
 <div id="app" style="display:none">
@@ -274,7 +274,7 @@
     <div id="statusbar">
       <div id="rec-dot"></div>
       <div id="status-text">ready</div>
-      <div id="fps-text">v13</div>
+      <div id="fps-text">v14</div>
     </div>
 
     <!-- Action bar floats bottom -->
@@ -1762,7 +1762,7 @@ function renderFrame(ts) {
       : (proxyReady && !isRendering) ? `proxy ${proxyVideo.videoWidth}×${proxyVideo.videoHeight}`
       : proxyBuilding ? 'building proxy' : 'original';
     document.getElementById('fps-text').textContent =
-      `v13 · ${Math.round(fpsFrames / secs)}fps · ${Math.round((perfGrabMs + perfFxMs) / n)}ms/frame · ${srcName}`;
+      `v14 · ${Math.round(fpsFrames / secs)}fps · ${Math.round((perfGrabMs + perfFxMs) / n)}ms/frame · ${srcName}`;
     fpsFrames = 0; fpsLastTime = now; perfGrabMs = 0; perfFxMs = 0;
   }
 }
@@ -3184,6 +3184,50 @@ function onRecordBtn() {
   }
 }
 
+// ── Safe MP4 muxing ───────────────────────────────────────────
+// Collect encoder output first, then mux with correct timing. Handles encoders that
+// emit B-frames (out of display order — the muxer throws on those unless given the
+// decode/composition timing) and encoders that attach the decoder setup ("avcC") to a
+// chunk other than the first. Keeps counts so failures say what actually happened.
+function makeChunkCollector() {
+  const c = { chunks: [], config: null, out: 0, cfgCount: 0, errors: [] };
+  c.output = (chunk, meta) => {
+    try {
+      const data = new Uint8Array(chunk.byteLength); chunk.copyTo(data);
+      if (meta && meta.decoderConfig) {
+        c.cfgCount++;
+        if (!c.config) {
+          const d = meta.decoderConfig.description;
+          c.config = { ...meta.decoderConfig,
+            description: d ? (d instanceof ArrayBuffer ? d.slice(0) : new Uint8Array(d.buffer, d.byteOffset, d.byteLength).slice().buffer) : undefined };
+        }
+      }
+      c.chunks.push({ data, type: chunk.type, ts: chunk.timestamp, dur: chunk.duration || 0 });
+      c.out++;
+    } catch (e) { if (c.errors.length < 3) c.errors.push(e.message || String(e)); }
+  };
+  c.summary = () => `${c.out} chunks out, ${c.cfgCount} with setup${c.reordered ? ', B-frames reordered' : ''}${c.errors.length ? ', err: ' + c.errors[0] : ''}`;
+  return c;
+}
+function muxCollected(c, muxer, fallbackDurUs) {
+  if (!c.chunks.length) throw new Error('encoder produced no output (' + c.summary() + ')');
+  if (!c.config) throw new Error('encoder gave no decoder setup (' + c.summary() + ')');
+  // Output order = decode order. Give each chunk DTS = i-th smallest PTS minus the
+  // largest reorder lag, so DTS rises steadily and never exceeds that chunk's PTS.
+  const pts = c.chunks.map(k => k.ts);
+  const sorted = pts.slice().sort((a, b) => a - b);
+  let delay = 0;
+  for (let i = 0; i < pts.length; i++) delay = Math.max(delay, sorted[i] - pts[i]);
+  c.reordered = delay > 0;
+  for (let i = 0; i < c.chunks.length; i++) {
+    const k = c.chunks[i];
+    const dts = sorted[i] - delay;
+    const dur = k.dur || (i + 1 < sorted.length ? Math.max(1, sorted[i + 1] - sorted[i]) : fallbackDurUs);
+    muxer.addVideoChunkRaw(k.data, k.type, k.ts, dur, i === 0 ? { decoderConfig: c.config } : undefined, k.ts - dts);
+    c.chunks[i] = null;   // release memory as we go
+  }
+}
+
 // ── DIAG: what this phone supports, in one screen ─────────────
 async function encodeOneFrame(cfg, w, h) {
   // Actually encode a frame — isConfigSupported can say yes and still fail
@@ -3205,6 +3249,44 @@ async function encodeOneFrame(cfg, w, h) {
   });
 }
 
+// Full pipeline test: encode N moving frames → collect → mux → play back the MP4
+async function pipelineTest(cfg, w, h, frames) {
+  let stage = 'encode';
+  const col = makeChunkCollector();
+  try {
+    let err = null;
+    const enc = new VideoEncoder({ output: col.output, error: e => { err = e; } });
+    enc.configure(cfg.config);
+    const c = document.createElement('canvas'); c.width = w; c.height = h;
+    const x = c.getContext('2d');
+    for (let i = 0; i < frames; i++) {
+      x.fillStyle = `hsl(${i * 12},70%,40%)`; x.fillRect(0, 0, w, h);
+      x.fillStyle = '#fff'; x.fillRect((i * w / frames) | 0, (h / 3) | 0, (w / 8) | 0, (h / 3) | 0);
+      const vf = new VideoFrame(c, { timestamp: Math.round(i * 1e6 / 24), duration: Math.round(1e6 / 24) });
+      enc.encode(vf, { keyFrame: i === 0 }); vf.close();
+      while (enc.encodeQueueSize > 3) await new Promise(r => setTimeout(r, 4));
+    }
+    await enc.flush(); enc.close();
+    if (err) throw err;
+    stage = 'mux';
+    const target = new Mp4Muxer.ArrayBufferTarget();
+    const muxer = new Mp4Muxer.Muxer({ target, video: { codec: cfg.mux, width: w, height: h }, fastStart: 'in-memory', firstTimestampBehavior: 'offset' });
+    muxCollected(col, muxer, 1e6 / 24);
+    muxer.finalize();
+    stage = 'play';
+    const url = URL.createObjectURL(new Blob([target.buffer], { type: 'video/mp4' }));
+    const v = document.createElement('video'); v.muted = true; v.setAttribute('playsinline', '');
+    v.style.cssText = 'position:fixed;left:0;top:0;width:2px;height:2px;opacity:0.01;pointer-events:none';
+    document.body.appendChild(v);
+    const ok = await new Promise(res => { v.onloadeddata = () => res(true); v.onerror = () => res(false); v.src = url; setTimeout(() => res(false), 6000); });
+    const info = ok ? `${v.videoWidth}×${v.videoHeight}, ${v.duration.toFixed(2)}s` : 'would not load';
+    v.remove(); URL.revokeObjectURL(url);
+    return (ok ? 'OK ' : 'FAIL at play: ') + `${info} — ${(target.buffer.byteLength / 1024) | 0}KB; ${col.summary()}`;
+  } catch (e) {
+    return `FAIL at ${stage}: ${e && e.message ? e.message : e} — ${col.summary()}`;
+  }
+}
+
 async function runDiagnostics() {
   const box = document.createElement('div');
   box.style.cssText = 'position:fixed;inset:0;z-index:999;background:#000e;color:#0f4;font:11px/1.45 "Courier New",monospace;padding:16px 14px 80px;overflow:auto;white-space:pre-wrap;';
@@ -3213,7 +3295,7 @@ async function runDiagnostics() {
   close.style.cssText = 'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);padding:12px 28px;background:#001a00;color:#0f4;border:1px solid #0f4;font:12px "Courier New",monospace;';
   const pre = document.createElement('div'); box.appendChild(pre); box.appendChild(close);
   document.body.appendChild(box);
-  const L = []; const out = (t) => { L.push(t); pre.textContent = 'TEMPORAL PRINTER v13 — DIAGNOSTICS\n(screenshot this)\n\n' + L.join('\n'); };
+  const L = []; const out = (t) => { L.push(t); pre.textContent = 'TEMPORAL PRINTER v14 — DIAGNOSTICS\n(screenshot this)\n\n' + L.join('\n'); };
   out('device: ' + navigator.userAgent.replace(/^Mozilla\/5\.0 /, ''));
   out('VideoEncoder: ' + (typeof VideoEncoder !== 'undefined' ? 'YES' : 'NO') + '   VideoFrame: ' + (typeof VideoFrame !== 'undefined' ? 'YES' : 'NO'));
   out('requestVideoFrameCallback: ' + ('requestVideoFrameCallback' in HTMLVideoElement.prototype ? 'YES' : 'NO'));
@@ -3236,12 +3318,14 @@ async function runDiagnostics() {
     const pc = await pickProxyEncoderConfig(pw, ph);
     L[L.length - 1] = `proxy encoder ${pw}×${ph}: ` + (pc ? pc.config.codec + ' accepted' : 'NONE accepted');
     out('');
-    if (pc) { out('  test encode: …'); L[L.length - 1] = '  test encode: ' + await encodeOneFrame(pc, pw, ph); out(''); }
+    if (pc) { out('  test encode: …'); L[L.length - 1] = '  test encode: ' + await encodeOneFrame(pc, pw, ph);
+              out('  pipeline (30 frames → mp4 → play): …'); L[L.length - 1] = '  pipeline: ' + await pipelineTest(pc, pw, ph, 30); out(''); }
     out(`render encoder ${rw}×${rh}@${fps}: checking…`);
     const rc = await pickEncoderConfig(rw, rh, fps);
     L[L.length - 1] = `render encoder ${rw}×${rh}@${fps}: ` + (rc ? rc.config.codec + ' accepted → frame-exact render' : 'NONE accepted → live-capture fallback');
     out('');
-    if (rc) { out('  test encode: …'); L[L.length - 1] = '  test encode: ' + await encodeOneFrame(rc, rw, rh); out(''); }
+    if (rc) { out('  test encode: …'); L[L.length - 1] = '  test encode: ' + await encodeOneFrame(rc, rw, rh);
+              out('  pipeline (8 frames → mp4 → play): …'); L[L.length - 1] = '  pipeline: ' + await pipelineTest(rc, rw, rh, 8); out(''); }
     // Raw per-codec answers, so we can see exactly what the phone says
     out('codec support (proxy size / render size):');
     for (const codec of ['avc1.640028', 'avc1.42e028', 'avc1.640033', 'avc1.640034', 'hvc1.1.6.L153.B0']) {
@@ -3313,8 +3397,9 @@ function resumeFilePreview() {
 
 async function pickProxyEncoderConfig(w, h) {
   return tryEncoderConfigs([
-    { codec: 'avc1.640028', mux: 'avc' }, { codec: 'avc1.4d0028', mux: 'avc' },
-    { codec: 'avc1.42e028', mux: 'avc' }, { codec: 'avc1.640033', mux: 'avc' },
+    // Baseline first: it never uses B-frames, and a preview copy doesn't need High's efficiency
+    { codec: 'avc1.42e028', mux: 'avc' }, { codec: 'avc1.42e01f', mux: 'avc' },
+    { codec: 'avc1.640028', mux: 'avc' }, { codec: 'avc1.4d0028', mux: 'avc' }, { codec: 'avc1.640033', mux: 'avc' },
     { codec: 'hvc1.1.6.L120.B0', mux: 'hevc' }, { codec: 'hvc1.1.6.L153.B0', mux: 'hevc' }
   ], w, h, { bitrate: 8e6, framerate: 30 });
 }
@@ -3347,7 +3432,9 @@ async function buildPreviewProxy() {
   const muxer = new Mp4Muxer.Muxer({ target, video: { codec: enc.mux, width: pw, height: ph },
     fastStart: 'in-memory', firstTimestampBehavior: 'offset' });
   let encErr = null;
-  const encoder = new VideoEncoder({ output: (c, m) => muxer.addVideoChunk(c, m), error: e => { encErr = e; } });
+  const col = makeChunkCollector();
+  let framesSent = 0;
+  const encoder = new VideoEncoder({ output: col.output, error: e => { encErr = e; } });
   encoder.configure(enc.config);
 
   const abort = (why) => {
@@ -3383,7 +3470,7 @@ async function buildPreviewProxy() {
       try {
         const vf = new VideoFrame(pc, { timestamp: Math.round(t * 1e6) });
         encoder.encode(vf, { keyFrame: n % 48 === 0 });
-        vf.close(); n++; lastT = t;
+        vf.close(); n++; lastT = t; framesSent++;
       } catch (e) { return abort(e); }
       // Show the clip playing (without effects) while the proxy is prepared
       outCtx.drawImage(pc, 0, 0, output.width, output.height);
@@ -3396,12 +3483,17 @@ async function buildPreviewProxy() {
   vid.addEventListener('ended', async function onEnd() {
     vid.removeEventListener('ended', onEnd);
     if (token !== proxyToken) return abort();
+    let stage = 'flush';
     try {
       await encoder.flush();
       if (encErr) throw encErr;
       encoder.close();
+      if (!framesSent) throw new Error('no frames were captured from the video');
+      stage = 'mux';
+      muxCollected(col, muxer, 1e6 / 30);
       muxer.finalize();
       if (token !== proxyToken) return;
+      stage = 'play';
       proxyURL = URL.createObjectURL(new Blob([target.buffer], { type: 'video/mp4' }));
       if (!proxyVideo) {
         proxyVideo = document.createElement('video');
@@ -3427,12 +3519,12 @@ async function buildPreviewProxy() {
       pv.requestVideoFrameCallback(proxyLoop);
       drawBlob._bgData = null; motBgData = null; resetScan();
       await pv.play().catch(() => {});
-      proxyStatus = `ready ${pw}×${ph} (${n} frames${missedTotal ? ', ' + missedTotal + ' missed' : ''}) via ${enc.config.codec}`;
+      proxyStatus = `ready ${pw}×${ph} (${n} frames${missedTotal ? ', ' + missedTotal + ' missed' : ''}) via ${enc.config.codec}; ${col.summary()}`;
       setStatus(`✓ Smooth preview ready (${pw}×${ph}) — renders still use full ${srcW}×${srcH}`);
     } catch (e) {
       abort(e);
       vid.loop = true; vid.currentTime = 0; vid.play().catch(() => {});
-      proxyFail('proxy file would not play (' + (e && e.message ? e.message : e) + ')');
+      proxyFail(`${stage} failed: ${e && e.message ? e.message : e} [${framesSent} frames in, ${col.summary()}]`);
     }
   });
   vid.play().catch(e => abort(e));
@@ -3595,8 +3687,9 @@ async function frameExactRender(rw, rh, fps, enc) {
     firstTimestampBehavior: 'offset'
   });
   let encError = null;
+  const col = makeChunkCollector();
   const encoder = new VideoEncoder({
-    output: (chunk, meta) => muxer.addVideoChunk(chunk, meta),
+    output: col.output,
     error: e => { encError = e; }
   });
   encoder.configure(enc.config);
@@ -3630,6 +3723,8 @@ async function frameExactRender(rw, rh, fps, enc) {
     await encoder.flush();
     if (encError) throw encError;
     encoder.close();
+    setRenderStatus('⚙ Writing MP4…');
+    muxCollected(col, muxer, frameDur);
     muxer.finalize();
     recordedBlob = new Blob([target.buffer], { type: 'video/mp4' });
     recordedBlob._ext = 'mp4';
@@ -3639,7 +3734,7 @@ async function frameExactRender(rw, rh, fps, enc) {
   } catch (e) {
     console.error('render failed', e);
     try { encoder.close(); } catch (_) {}
-    setRenderStatus('⚠ Render failed: ' + (e && e.message ? e.message : e), 8000);
+    setRenderStatus('⚠ Render failed: ' + (e && e.message ? e.message : e) + ` [${encoded} frames in, ${col.summary()}]`, 12000);
   } finally {
     // Restore preview resolution + state, resume looping preview
     output.width = prevW; output.height = prevH;
