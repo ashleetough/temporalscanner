@@ -916,8 +916,8 @@ function checkPin() {
 // ── Constants ─────────────────────────────────────────────────
 const SEG_W    = 256;   // MediaPipe inference resolution
 const SEG_H    = 144;
-const DETECT_W = 240;   // Blob detection resolution
-const DETECT_H = 135;
+let DETECT_W = 240;   // Blob detection resolution — swapped to 135×240 for portrait
+let DETECT_H = 135;   // frames so detection keeps the same detail on both axes
 
 // ── State ─────────────────────────────────────────────────────
 let mode = 'scan';
@@ -1025,8 +1025,7 @@ function startStreamFromConstraints(c) {
       const rawW = video.videoWidth  || 640;
       const rawH = video.videoHeight || 480;
       // Cap preview canvas to 720p to keep rendering smooth on mobile
-      const MAX_W = 1280, MAX_H = 720;
-      const scale = Math.min(1, MAX_W / rawW, MAX_H / rawH);
+      const scale = previewScale(rawW, rawH);
       const vw = Math.round(rawW * scale);
       const vh = Math.round(rawH * scale);
       output.width  = vw;
@@ -1444,12 +1443,11 @@ function loadVideoFile(input) {
   fileVideo=document.getElementById('file-video');
   fileVideo.src=url; fileVideo.loop=true; fileVideo.muted=true;
   fileVideoRVFC = false;  // reset; will be set again if rVFC is available
-  fileVideo._minFrameDelta = 0; fileVideo._lastMediaTime = undefined;
+  fileVideo._minFrameDelta = 0; fileVideo._lastMediaTime = undefined; fileVideo._dSum = 0; fileVideo._dCount = 0;
   fileVideo.onloadedmetadata=function(){
     const rawW=fileVideo.videoWidth||640, rawH=fileVideo.videoHeight||480;
     // Preview at screen-friendly size for live loop
-    const MAX_W=1280, MAX_H=720;
-    const scale=Math.min(1, MAX_W/rawW, MAX_H/rawH);
+    const scale=previewScale(rawW, rawH);
     const vw=Math.round(rawW*scale), vh=Math.round(rawH*scale);
     // Store full source res for offline render
     fileVideo._srcW = rawW; fileVideo._srcH = rawH;
@@ -1475,6 +1473,9 @@ function loadVideoFile(input) {
           if (thisVid._lastMediaTime !== undefined) {
             const d = meta.mediaTime - thisVid._lastMediaTime;
             if (d > 0.004 && d < 0.2 && (!thisVid._minFrameDelta || d < thisVid._minFrameDelta)) thisVid._minFrameDelta = d;
+            // Average single-frame gaps (skip gaps from dropped frames) — exact rate even
+            // when container timestamps are rounded (e.g. 41/42/42 ms for 24fps)
+            if (d > 0.004 && thisVid._minFrameDelta && d < thisVid._minFrameDelta * 1.5) { thisVid._dSum = (thisVid._dSum || 0) + d; thisVid._dCount = (thisVid._dCount || 0) + 1; }
           }
           thisVid._lastMediaTime = meta.mediaTime;
         }
@@ -1499,6 +1500,15 @@ function loadVideoFile(input) {
 function getActiveVideo() {
   if (videoSource === 'file' && fileVideo) return fileVideo;
   return document.getElementById('video');
+}
+
+// ── Preview size cap ──────────────────────────────────────────
+// Long side ≤1280, short side ≤720 — so portrait phone video previews at 720×1280
+// (same pixel budget as landscape 1280×720) instead of a squashed 405×720.
+// Preview only: renders always use full source resolution.
+function previewScale(w, h) {
+  const long = Math.max(w, h), short = Math.min(w, h);
+  return Math.min(1, 1280 / long, 720 / short);
 }
 
 // ── Resolution-independent sizing ─────────────────────────────
@@ -2097,6 +2107,13 @@ function drawBlob(vw, vh) {
   const lineWidth = parseInt(document.getElementById('blob-linewidth').value) * resScale;
   const trailLen  = parseInt(document.getElementById('blob-traillen').value);
   const trailFade = parseInt(document.getElementById('blob-trailfade').value) / 100;
+  // Detection grid follows frame orientation (portrait video was squashed into 240×135)
+  const wantDW = vw >= vh ? 240 : 135, wantDH = vw >= vh ? 135 : 240;
+  if (DETECT_W !== wantDW || DETECT_H !== wantDH || bgCanvas.width !== wantDW || bgCanvas.height !== wantDH) {
+    DETECT_W = wantDW; DETECT_H = wantDH;
+    bgCanvas.width = DETECT_W; bgCanvas.height = DETECT_H;
+    drawBlob._bgData = null; prevBlobs = []; blobTrails = {};
+  }
   const scaleX    = vw / DETECT_W;
   const scaleY    = vh / DETECT_H;
 
@@ -3178,13 +3195,21 @@ function loadMp4Muxer() {
 }
 
 function detectSourceFps() {
-  const d = fileVideo && fileVideo._minFrameDelta;
-  if (!d) return 30;
-  const raw = 1 / d;
-  const common = [23.976, 24, 25, 29.97, 30, 48, 50, 59.94, 60];
-  let best = 30, bestErr = Infinity;
-  for (const c of common) { const e = Math.abs(c - raw); if (e < bestErr) { bestErr = e; best = c; } }
-  return bestErr / best < 0.06 ? best : 30;
+  if (!fileVideo || !fileVideo._minFrameDelta) return 30;
+  const n = fileVideo._dCount || 0;
+  const precise = n >= 30;   // enough single-frame gaps for the average to be exact
+  const raw = (n >= 8) ? n / fileVideo._dSum : 1 / fileVideo._minFrameDelta;
+  const snap = list => { let best = list[0], err = Infinity;
+    for (const c of list) { const e = Math.abs(c - raw) / c; if (e < err) { err = e; best = c; } } return [best, err]; };
+  // Few samples (clip just loaded): timestamps can be rounded by ±1ms, so only snap to
+  // the whole-number rates phones actually record.
+  if (!precise) { const [w, e] = snap([24, 25, 30, 48, 50, 60]); return e < 0.05 ? w : 30; }
+  const [best, err] = snap([23.976, 24, 25, 29.97, 30, 48, 50, 59.94, 60]);
+  if (err >= 0.06) return 30;
+  // 23.976/24, 29.97/30, 59.94/60 are only 0.1% apart — prefer the whole rate when close
+  const whole = Math.round(best);
+  if (best !== whole && Math.abs(raw - whole) / whole < 0.0015) return whole;
+  return best;
 }
 
 async function pickEncoderConfig(w, h, fps) {
@@ -3302,7 +3327,7 @@ async function frameExactRender(rw, rh, fps, enc) {
   encoder.configure(enc.config);
 
   const duration = fileVideo.duration;
-  const total = Math.max(1, Math.floor(duration * fps));
+  const total = Math.max(1, Math.round(duration * fps));  // round: never drop the last frame
   const frameDur = 1e6 / fps;   // microseconds
   const keyEvery = Math.round(fps * 2);
   const t0 = performance.now();
