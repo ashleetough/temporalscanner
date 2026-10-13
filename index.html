@@ -77,7 +77,7 @@
     font-size:8px; letter-spacing:1px; color:#555; pointer-events:none;
   }
   #status-text { flex:1; }
-  #fps-text { color:#333; font-size:8px; }
+  #fps-text { color:#888; font-size:9px; white-space:nowrap; }
   #rec-dot { width:6px; height:6px; border-radius:50%; background:var(--red); display:none; animation:blink 1s infinite; }
   @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
 
@@ -1708,7 +1708,9 @@ function renderFrame(ts) {
   if (isHeavy) lastHeavyTime = ts;
 
   // One video→canvas grab per frame; all effects read from it
+  const _t0 = performance.now();
   grabFrame(vw, vh);
+  const _t1 = performance.now();
 
   // Feed segmentor async every 3 frames when subject cut is active (mediapipe only)
   if ((opts.segCut || opts.segShow || opts.scanCut) && document.getElementById('seg-method').value === 'mediapipe') {
@@ -1725,14 +1727,31 @@ function renderFrame(ts) {
 
   frameCount++;
 
-  // fps = frames actually drawn (not screen refreshes), so it reflects real smoothness
-  fpsFrames++;
+  // ── Performance readout ──
+  // drawn fps = frames we actually drew; src = frames the video decoder delivered;
+  // grab = time to pull the frame out of the video (decode/HDR conversion/scale);
+  // fx = time the effect itself took. Tells us where a slowdown really is.
   const now = performance.now();
+  perfGrabMs += _t1 - _t0; perfFxMs += now - _t1;
+  fpsFrames++;
   if (now - fpsLastTime >= 1000) {
-    document.getElementById('fps-text').textContent = fpsFrames + 'fps';
-    fpsFrames = 0; fpsLastTime = now;
+    const secs = (now - fpsLastTime) / 1000;
+    let srcTxt = '';
+    if (videoSource === 'file' && fileVideo && fileVideo.getVideoPlaybackQuality) {
+      const q = fileVideo.getVideoPlaybackQuality();
+      if (perfLastVF >= 0 && !isRendering) {
+        const shown = (q.totalVideoFrames - q.droppedVideoFrames) - perfLastVF;
+        srcTxt = ` (src ${Math.round(shown / secs)})`;
+      }
+      perfLastVF = q.totalVideoFrames - q.droppedVideoFrames;
+    }
+    const n = Math.max(1, fpsFrames);
+    document.getElementById('fps-text').textContent =
+      `${Math.round(fpsFrames / secs)}fps${srcTxt} · grab ${Math.round(perfGrabMs / n)}ms · fx ${Math.round(perfFxMs / n)}ms`;
+    fpsFrames = 0; fpsLastTime = now; perfGrabMs = 0; perfFxMs = 0;
   }
 }
+let perfGrabMs = 0, perfFxMs = 0, perfLastVF = -1;
 
 function loop(ts) {
   animId = requestAnimationFrame(loop);
